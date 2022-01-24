@@ -90,7 +90,7 @@ void publish_task(void* arg)
 
         if(wifi_get_internet_status() && data_queue_count > 0)
         {
-            LOGI("before publish data_queue_count = %d", data_queue_count);
+            // LOGI("before publish data_queue_count = %d", data_queue_count);
             data_t item = {0};
             ret = data_get_from_queue(&item);
 
@@ -101,7 +101,7 @@ void publish_task(void* arg)
                 {
                     data_add_to_queue(item);
                 }
-                LOGI("after publish data_queue_count = %d", data_queue_count);
+                // LOGI("after publish data_queue_count = %d", data_queue_count);
             }
             // LOG_TASK_HWM();
         }
@@ -168,91 +168,6 @@ void weather_task(void* arg)
     LOGI("Leaving weather task");
     vTaskDelete(NULL);
 }
-
-// void handle_sensor_temp_collection()
-// {
-//     static bool first_collection = false;
-//     static int counter = 0;
-//     // static float temp_prior = -1.0f;
-
-//     time_t now = TIME_NOW();
-//     uptime_t uptime = get_uptime();
-//     float temp = get_temp(NUM_SAMPLES);
-//     // if(temp_prior <= 0) temp_prior = temp;
-
-//     float percent_change = ((float)temp - (float)temp_avg) / (float)temp_avg * 100.0f;
-//     // if(ABS(percent_change) >= 7)
-//     // {
-//     //     LOGW("Large change (%.2f, avg: %.2f)", temp, temp_avg);
-//     //     // for(int i = 0; i < TEMP_READINGS_MAX; ++i)
-//     //     // {
-//     //     //     int idx = (temp_readings_index+i)%TEMP_READINGS_MAX;
-//     //     //     printf("%d %d: %.2f\n", i, idx, temp_readings[idx]);
-//     //     // }
-//     //     // // discard the point
-//     //     // return;
-//     // }
-
-//     circ_buf_insert(temp, &temp_readings);
-
-
-
-
-//     // temp_readings[temp_readings_index++] = temp;
-//     // if(temp_readings_index >= TEMP_READINGS_MAX)
-//     //     temp_readings_index = 0;
-
-//     circ_buf_calc_avg(&temp_avg, &temp_readings);
-//     // temp_avg = calc_temp_avg();
-
-
-//     // if(counter == 10)
-//     {
-//         printf("Avg: %2.2f, Cur: %2.2f, Change: %c%.2f%%  ", temp_avg, temp, percent_change < 0 ? '-' : '+', ABS(percent_change));
-//         for(int i = 0; i < TEMP_READINGS_MAX; ++i)
-//         {
-//             float value = 0.0f;
-//             circ_buf_get_value(i, &value, &temp_readings);
-//             printf("%5.2f", value);
-//             if(i != (TEMP_READINGS_MAX-1)) printf(", ");
-//         }
-//         printf("\n");
-//         counter = 0;
-//     }
-
-//     // float temp_avg_prior = temp_avg;
-//     // float prior_temp = temp_readings[(temp_readings_index+8)%TEMP_READINGS_MAX];
-//     // float avg_percent_change = ((float)temp - (float)prior_temp) / (float)prior_temp * 100.0f;
-//     // // if(ABS(avg_percent_change) >= 2)
-//     // {
-//     //     printf("Temp Change: %c%.2f%%\n", avg_percent_change < 0 ? '-' : '+', ABS(avg_percent_change));
-//     // }
-
-
-//     bool add_data = false;
-
-//     if(now != 0)
-//     {
-//         if(!first_collection) add_data = true;
-//         if((uptime - sensor_last_uptime) >= TEMP_SENSOR_FREQ) add_data = true;
-//     }
-
-//     if(add_data)
-//     {
-//         first_collection = true;
-//         LOGI("Adding data to queue (sensor temp: %.2f)", temp_avg);
-//         data_t data = {0};
-//         data.timestamp = now;
-//         data.data_type = DATA_TYPE_IN_TEMP;
-//         data.value_num = temp_avg;
-//         data.uptime = uptime;
-//         data_add_to_queue(data);
-//         sensor_last_uptime = uptime;
-//     }
-
-//     counter++;
-// }
-
 
 
 void handle_sensor_temp_collection()
@@ -361,9 +276,7 @@ void handle_sensor_temp_collection()
 
 void IRAM_ATTR timer_cb(void* arg)
 {
-// #if GET_SENSOR_TEMP
-//     handle_sensor_temp_collection();
-// #endif
+
 }
 
 void IRAM_ATTR sensor_timer_cb(void* arg)
@@ -642,7 +555,7 @@ bool data_add_to_queue(data_t item)
     memcpy(&data_queue[data_queue_count], &item, sizeof(data_t));
     data_queue_count++;
 
-    LOGI("added to queue data_queue_count = %d", data_queue_count);
+    // LOGI("added to queue data_queue_count = %d", data_queue_count);
 
     data_queue_locked = false;
     return true;

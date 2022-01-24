@@ -50,12 +50,11 @@
 #if DEVICE_ROLE == DEVICE_LR
 
 #define DEVICE_NAME "living_room"
-
-#define GET_OUT_TEMP 1
+#define GET_OUT_TEMP 0
 #define OUT_TEMP_FREQ (SECONDS_IN_HOUR)
-
 #define GET_SENSOR_TEMP 1
-#define TEMP_SENSOR_FREQ (60*5)
+// #define TEMP_SENSOR_FREQ (60*5)
+#define TEMP_SENSOR_FREQ (20)
 
 #endif
 

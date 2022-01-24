@@ -11,8 +11,14 @@
 // DEFINES
 // ====================================================================
 
+
+
+// curl -iL https://script.google.com/macros/s/AKfycbzOO7HPafFKjfDwXwZi10nLMJTA4tvg-bXGLQ-mMuQOL5-2oCPcskbkz_UiOS6VkzRz/exec\?sheet_name\=tes1t\&timestamp\=df1642702169\&uptime\=69420\&device\=test_url\&mac\=24:6F:28:9C:E6:54\&data_type\=IN_TEMP\&value\=12.34
+
+
 // #define URL_TEST "https://script.google.com/macros/s/AKfycbzOO7HPafFKjfDwXwZi10nLMJTA4tvg-bXGLQ-mMuQOL5-2oCPcskbkz_UiOS6VkzRz/exec?sheet_name=test&timestamp=1642594728&device=test1&mac=F8:8A:5E:3D:42:FF&temp=10.2&raw=1124&event=sample&value=10.21"
-#define URL_TEST "https://script.google.com/macros/s/AKfycbzOO7HPafFKjfDwXwZi10nLMJTA4tvg-bXGLQ-mMuQOL5-2oCPcskbkz_UiOS6VkzRz/exec?sheet_name=test&timestamp=1642702169&device=living_room&mac=24:6F:28:9C:E6:54&data_type=IN_TEMP&value=72.68"
+#define URL_TEST_ERROR "https://script.google.com/macros/s/AKfycbzOO7HPafFKjfDwXwZi10nLMJTA4tvg-bXGLQ-mMuQOL5-2oCPcskbkz_UiOS6VkzRz/exec?sheet_name=invalid&timestamp=1642702169&uptime=69420&device=test_url&mac=24:6F:28:9C:E6:54&data_type=IN_TEMP&value=12.34"
+#define URL_TEST "https://script.google.com/macros/s/AKfycbzOO7HPafFKjfDwXwZi10nLMJTA4tvg-bXGLQ-mMuQOL5-2oCPcskbkz_UiOS6VkzRz/exec?sheet_name=test&timestamp=1642702169&uptime=69420&device=test_url&mac=24:6F:28:9C:E6:54&data_type=IN_TEMP&value=12.34"
 
 #define PUB_URL_MAX 300
 #define PUB_URL_PREFIX "https://script.google.com/macros/s/AKfycbzOO7HPafFKjfDwXwZi10nLMJTA4tvg-bXGLQ-mMuQOL5-2oCPcskbkz_UiOS6VkzRz/exec?"
@@ -38,7 +44,7 @@
 static esp_http_client_handle_t pub_client = NULL;
 static char pub_url[PUB_URL_MAX+1] = {0};
 static int data_event_count = 0;
-static int got_success = false;
+static bool upload_success = false;
 
 static esp_http_client_handle_t weather_client = NULL;
 static char weather_html[WEATHER_HTML_MAX+1] = {0};
@@ -90,18 +96,20 @@ bool publish_data(data_t item)
         str_append(pub_url, PUB_URL_MAX, "&value=%.2f", item.value_num);
     }
 
+
     LOGI("Publishing data (%ld, %u, %d, %.2f)", item.timestamp, item.uptime, item.data_type, item.value_num);
 
     // printf("%s\n", pub_url);
 
     esp_http_client_config_t config = {};
     config.url = pub_url;
+    // config.url = URL_TEST_ERROR;
     config.cert_pem = HTTPS_PUB_CERT;
     config.method = HTTP_METHOD_GET;
     config.transport_type = HTTP_TRANSPORT_OVER_SSL;
     config.event_handler = http_pub_event_handler;
-    config.timeout_ms = 10*1000; // 10 seconds
-    config.disable_auto_redirect = false;
+    config.timeout_ms = 20*1000; // 20 seconds
+    config.disable_auto_redirect = true;
     config.buffer_size = 2048;
     config.buffer_size_tx = 2048;
 
@@ -117,28 +125,36 @@ bool publish_data(data_t item)
     }
 
     data_event_count = 0;
-    got_success = false;
+    upload_success = false;
 
     TAKE_SEMPHR();
+    esp_log_level_set("HTTP_CLIENT", ESP_LOG_NONE);
     err = esp_http_client_perform(pub_client);
-
-    int sc = esp_http_client_get_status_code(pub_client);
-    // if(sc == 200 && err == ESP_OK)
-    if(got_success)
-    {
-        LOGI("Publish succeeded");
-        ret = true;
-    }
-    else
-    {
-        LOGE("Failed, status code: %d, pub_client perform error: 0x%x (%s)", sc, err, esp_err_to_name(err));
-        ret = false;
-    }
-
     esp_http_client_close(pub_client);
-
+    esp_log_level_set("HTTP_CLIENT", ESP_LOG_ERROR);
     GIVE_SEMPHR();
-    return ret;
+
+    LOGI("Upload result: %s", upload_success ? "SUCCESS" : "FAIL");
+    return upload_success;
+
+
+    // int sc = esp_http_client_get_status_code(pub_client);
+    // // if(sc == 200 && err == ESP_OK)
+    // if(upload_success)
+    // {
+    //     LOGI("Publish succeeded");
+    //     ret = true;
+    // }
+    // else
+    // {
+    //     LOGE("Failed, status code: %d, pub_client perform error: 0x%x (%s)", sc, err, esp_err_to_name(err));
+    //     ret = false;
+    // }
+
+    // esp_http_client_close(pub_client);
+
+    // GIVE_SEMPHR();
+    // return ret;
 }
 
 bool get_out_temp(float* out_temp)
@@ -256,7 +272,7 @@ static esp_err_t http_pub_event_handler(esp_http_client_event_t *evt)
 
         case HTTP_EVENT_ON_CONNECTED:
         {
-            // LOGI("HTTP_EVENT_ON_CONNECTED");
+            // LOGI("[Publish] CONNECTED");
         } break;
 
         case HTTP_EVENT_HEADER_SENT:
@@ -272,18 +288,34 @@ static esp_err_t http_pub_event_handler(esp_http_client_event_t *evt)
 
         case HTTP_EVENT_ON_DATA:
         {
-            data_event_count++;
-            if(data_event_count == 2)
+            char* check = NULL;
+            if(evt->data_len > 0)
             {
-                // LOGI("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-                if(evt->data_len != 0) LOGI("Publish result: %.*s", evt->data_len, (char*)evt->data);
-
-                if(evt->data_len == 7)
-                {
-                    if(memcmp("success",evt->data, 7) == 0)
-                        got_success = true;
-                }
+                check = strstr((char*)evt->data, "<TITLE>Moved Temporarily</TITLE>");
+                // LOGI("%.*s", evt->data_len, (char*)evt->data);
             }
+
+            if(check != NULL)
+            {
+                int sc = esp_http_client_get_status_code(pub_client);
+                if(sc == 302)
+                    upload_success = true;
+                else
+                    LOGI("[Publish] status code: %d", sc);
+            }
+
+
+            // data_event_count++;
+            // if(data_event_count == 2)
+            // {
+            //     // LOGI("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+            //     if(evt->data_len != 0) LOGI("Publish result: %.*s", evt->data_len, (char*)evt->data);
+            //     if(evt->data_len == 7)
+            //     {
+            //         if(memcmp("success",evt->data, 7) == 0)
+            //             upload_success = true;
+            //     }
+            // }
 
         } break;
 
@@ -294,7 +326,7 @@ static esp_err_t http_pub_event_handler(esp_http_client_event_t *evt)
 
         case HTTP_EVENT_DISCONNECTED:
         {
-            // LOGI("HTTP_EVENT_DISCONNECTED");
+            // LOGI("[Publish] DISCONNECTED");
         } break;
 
         default:
