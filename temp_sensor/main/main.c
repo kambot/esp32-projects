@@ -1,3 +1,10 @@
+/*
+NOTES
+
+https://docs.google.com/spreadsheets/d/1O-z7duQb51xUqICarcST_zylLlNoNLT3h-m2lBl_zZE/edit#gid=48128196
+https://script.google.com/home/projects/1ZA9l4R5-BIOaaRHMahA3UlC1EEdp_W3yW8jsh3AoxSl_jaVoVb9pd1Gt/edit
+*/
+
 // ====================================================================
 // INCLUDES
 // ====================================================================
