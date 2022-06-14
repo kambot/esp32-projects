@@ -32,11 +32,7 @@
 #define NVS_KEY_PASS "wifi_pass"
 #define NVS_KEY_AUTH "wifi_auth"
 
-// -------------------------------------------------------
-// devices
-// -------------------------------------------------------
-#define DEVICE_LR 1
-
+#define NVS_BD_LIST "bd_data"
 
 // -------------------------------------------------------
 // configurations
@@ -44,6 +40,7 @@
 
 #define TIME_ZONE       "America/New_York"
 
+#define XOR 0xAA
 
 // -------------------------------------------------------
 // misc
@@ -146,6 +143,16 @@ typedef struct
 } task_data_t;
 
 
+typedef struct
+{
+    char name[31];
+    uint8_t month;
+    uint8_t day;
+    // uint8_t year;
+    uint16_t yday; //1 based
+    // uint8_t rank;
+} birthday_t;
+
 // time since boot (in seconds)
 typedef uint32_t uptime_t;
 
@@ -157,6 +164,9 @@ typedef uint32_t uptime_t;
 
 extern uint8_t mac_address[6];
 extern uint8_t bt_mac_address[6];
+
+extern char* bd_data;
+extern bool refresh_bd_rank;
 
 // ====================================================================
 // GLOBAL FUNCTIONS
@@ -171,3 +181,16 @@ void print_bytes(uint8_t* bytes, int len, int per_line, char* fmt, char* sep);
 bool mac_str_to_bytes(char* mac_str, uint8_t ret_bytes[6], bool has_colons);
 bool str_append(char* str, int max_len, const char* format, ...);
 
+
+bool hexstr_to_bytes(char* hexstr, uint8_t* ret_bytes);
+char* decrypt_data(char* hexstr);
+
+bool load_bd_data();
+bool save_bd_data();
+bool erase_bd_data();
+
+bool line_to_bd_info(char* str, birthday_t* b);
+void parse_bd_data();
+void rank_bd_list();
+
+// download data -> decrypt -> parse -> sort/rank

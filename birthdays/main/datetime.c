@@ -58,6 +58,7 @@ static EXT_RAM_ATTR esp_timer_handle_t sync_timer = NULL;
 static bool is_leap_year(int year);
 static int get_num_leap_years(int start_year, int end_year);
 static int get_days_in_month(int month, int year);
+static int get_days_in_month2(int month);
 static void time_updater();
 static time_t time_get_timestamp(struct tm time_info, uint16_t base_year);
 static void time_format_timeinfo(struct tm time_info, const char* format, char* ret_str, bool gmt);
@@ -330,7 +331,8 @@ void time_stop()
 // now
 // ------------------------------------------------------------------------------------------------------------------------
 
-time_t time_now(uint16_t base_year) {
+time_t time_now(uint16_t base_year)
+{
     if(!TIME_UPDATED_ONCE()) return 0;
     time_updater();
     return time_get_timestamp(tm_gmt, base_year);
@@ -525,6 +527,26 @@ time_t time_timestamp_from_tm(struct tm time_info, uint16_t base_year)
 
 
 
+// other
+
+// 1 based
+uint16_t get_day_of_year(uint8_t month, uint8_t day)
+{
+    if(!TIME_UPDATED_ONCE()) return 0;
+    if(day > get_days_in_month(month, tm_local.tm_year+1900)) return 0;
+
+    uint16_t days = 0;
+    for(int i = 1; i < month; ++i)
+    {
+        days += get_days_in_month(i, tm_local.tm_year+1900);
+    }
+
+    days += day;
+
+    // printf("%u/%u -> %u\n", month, day, days);
+    return days;
+}
+
 // ====================================================================
 // STATIC FUNCTIONS
 // ====================================================================
@@ -560,6 +582,25 @@ static int get_days_in_month(int month, int year)
     switch (month) {
         case 1:  return 31;
         case 2:  {if(is_leap_year(year)) return 29; else return 28; }
+        case 3:  return 31;
+        case 4:  return 30;
+        case 5:  return 31;
+        case 6:  return 30;
+        case 7:  return 31;
+        case 8:  return 31;
+        case 9:  return 30;
+        case 10: return 31;
+        case 11: return 30;
+        case 12: return 31;
+    }
+    return 0;
+}
+
+static int get_days_in_month2(int month)
+{
+    switch (month) {
+        case 1:  return 31;
+        case 2:  return 29;
         case 3:  return 31;
         case 4:  return 30;
         case 5:  return 31;

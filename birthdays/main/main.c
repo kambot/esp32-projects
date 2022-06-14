@@ -5,15 +5,14 @@ https://github.com/walidamriou/ESP_Data_to_Google_Sheets
 
 
 EXEC:
-https://script.google.com/macros/s/AKfycbxtj6ECNfhjsTSyxy56yU-FqCDJZY6Lo438xsWvQ4ar23nMFXdblidfrYytOLHDTs3e/exec
+https://script.google.com/macros/s/AKfycbzec30qonlzTAWnisb_CLsjdsq7-jEdejkrTdgzmluW48tU3IENSdARUbbUdGcPXLKm/exec
+
+DEPLOYMENT ID:
+AKfycbzec30qonlzTAWnisb_CLsjdsq7-jEdejkrTdgzmluW48tU3IENSdARUbbUdGcPXLKm
 
 EDIT CODE:
 https://script.google.com/home/projects/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEATW75xHcil-nd-gj4ABv-d/edit
 
-OTHER:
-AKfycbw9iX9wSpJpkGSnfjSwzg8i7TSooPt9FKhS3UPigz8fil-z4nSESiKJiF5SoBvVC9wR
-https://script.google.com/macros/s/AKfycbw9iX9wSpJpkGSnfjSwzg8i7TSooPt9FKhS3UPigz8fil-z4nSESiKJiF5SoBvVC9wR/exec
-https://script.google.com/macros/library/d/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEATW75xHcil-nd-gj4ABv-d/1
 */
 
 // ====================================================================
@@ -33,15 +32,27 @@ https://script.google.com/macros/library/d/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEAT
 
 esp_timer_handle_t timer_handle;
 esp_timer_handle_t sensor_timer_handle;
-task_data_t publish_task_cfg = {0};
+task_data_t bd_task_cg = {0};
 uint8_t mac_address[6] = {0};
 uint8_t bt_mac_address[6] = {0};
 
 
+char* bd_data = NULL; // string (csv format)
+
+#define BD_LIST_MAX 100
+birthday_t bd_list[BD_LIST_MAX] = {0};
+int bd_list_count = 0;
+
+bool refresh_bd_rank = true;
+
+int yday = 0;
+
+
 // ====================================================================
-// MACROS
+// MACROS/DEFINES
 // ====================================================================
 
+#define BD_DOWNLOAD_SECONDS  (10*60)
 
 // ====================================================================
 // STATIC FUNCTION DECLARATIONS
@@ -52,7 +63,7 @@ const char* last_reset_reason_str();
 void print_task_list();
 
 void init();
-void publish_task(void* arg);
+void birthdays_task(void* arg);
 void IRAM_ATTR timer_cb(void* arg);
 
 
@@ -66,19 +77,66 @@ void app_main()
     init();
     print_task_list();
 
+    // //TEST
+    // for(;;)
+    // {
+    //     if(TIME_NOW() != 0)
+    //     {
+    //         struct tm t = time_now_tm_local();
+    //         printf("day:  %d\n", t.tm_mday);
+    //         printf("mon:  %d\n", t.tm_mon); //0 based
+    //         printf("year: %d\n", t.tm_year+1900);
+    //         printf("yday: %d\n", t.tm_yday);    //0 based
+    //         break;
+    //     }
+    //     delay(500);
+    // }
+
     vTaskDelete(NULL);
 }
 
 void birthdays_task(void* arg)
 {
     LOGI("Entered birthday task");
-    bool ret;
+
+    // wait for sntp sync
+    for(;;)
+    {
+        if(TIME_NOW() != 0) break;
+        delay(100);
+    }
+
+    load_bd_data();
+    if(bd_data != NULL)
+    {
+        parse_bd_data();
+    }
+
+
+    static int64_t refresh_timer = 0;
 
     for(;;)
     {
 
-        if(wifi_get_internet_status())
+        if(wifi_get_internet_status() && esp_timer_get_time() >= refresh_timer)
         {
+            // if this is successful, it will also update bd_data and store to NVS partition
+            bool ret = get_birthdays();
+
+            if(ret)
+            {
+                refresh_timer = esp_timer_get_time() + BD_DOWNLOAD_SECONDS*1e6;
+            }
+            else
+            {
+                refresh_timer = esp_timer_get_time() + 30*1e6;
+            }
+
+        }
+
+        if(refresh_bd_rank)
+        {
+            rank_bd_list();
         }
 
         delay(1000);
@@ -93,6 +151,20 @@ void birthdays_task(void* arg)
 
 void IRAM_ATTR timer_cb(void* arg)
 {
+    if(TIME_NOW() != 0)
+    {
+        struct tm t = time_now_tm_local();
+        int _yday = t.tm_yday+1;
+
+        if(yday != _yday)
+        {
+            LOGI("yday: %d -> %d", yday, _yday);
+            yday = _yday;
+            refresh_bd_rank = true;
+        }
+
+    }
+
 
 }
 
@@ -132,19 +204,19 @@ void init()
     // wifi_debug_logs(true);
 
     wifi_load_credentials();
-    wifi_set_all("STUDIO_1837_DEVICES", "soap4life", 3, WIFI_CONTEXT_PRIMARY);    // temp
+    wifi_set_all("STUDIO_1837_CORP", "soap4life", 3, WIFI_CONTEXT_PRIMARY);    // temp
 
     wifi_enable();
     wifi_connect(); // must always call this after setting wifi credentials
 
 
 
-    publish_task_cfg.task_func = birthdays_task;
-    publish_task_cfg.task_name = "birthdays_task";
-    publish_task_cfg.config.core = 0;
-    publish_task_cfg.config.priority = 10;
-    publish_task_cfg.config.stack_size = 5000;
-    create_task(publish_task_cfg);
+    bd_task_cg.task_func = birthdays_task;
+    bd_task_cg.task_name = "birthdays_task";
+    bd_task_cg.config.core = 0;
+    bd_task_cg.config.priority = 10;
+    bd_task_cg.config.stack_size = 5000;
+    create_task(bd_task_cg);
 
     esp_timer_create_args_t timer_args = {};
     timer_args.callback = &timer_cb;
@@ -388,4 +460,260 @@ bool str_append(char* str, int max_len, const char* format, ...)
     }
 
     return true;
+}
+
+
+
+
+bool hexstr_to_bytes(char* hexstr, uint8_t* ret_bytes)
+{
+    int len = strlen(hexstr);
+    if(len % 2 != 0 || len == 0) return false;
+    for(int i = 0; i < (len/2); ++i)
+    {
+        char b0 = hexstr[i*2];
+        char b1 = hexstr[i*2+1];
+        char buf[5] = {'0', 'x', b0, b1, 0};
+        long val = strtol(buf, NULL, 0);
+        ret_bytes[i] = (uint8_t)val;
+    }
+    return true;
+}
+
+
+char* decrypt_data(char* hexstr)
+{
+    int num_bytes = strlen(hexstr) / 2;
+    uint8_t* bytes0 = calloc(num_bytes, sizeof(uint8_t));
+
+    bool ret = hexstr_to_bytes(hexstr, bytes0);
+    if(!ret)
+    {
+        LOGE("Failed to convert to bytes");
+        free(bytes0);
+        return NULL;
+    }
+
+    char* data = calloc(num_bytes+1, sizeof(char));
+    for(int i = 0; i < num_bytes; ++i)
+    {
+        data[i] = (~bytes0[i]) ^ XOR;
+    }
+
+    free(bytes0);
+    return data;
+}
+
+bool load_bd_data()
+{
+    size_t size = 0;
+    bool ret = store_nvs_read_str(NVS_NAMESPACE, NVS_BD_LIST, NULL, &size);
+
+    if(!ret || size == 0)
+    {
+        LOGE("Failed to load birthday data");
+        return false;
+    }
+
+    if(bd_data) free(bd_data);
+    bd_data = calloc(size+1, sizeof(char));
+
+    ret = store_nvs_read_str(NVS_NAMESPACE, NVS_BD_LIST, bd_data, &size);
+    if(!ret)
+    {
+        free(bd_data);
+        bd_data = NULL;
+        LOGE("Failed to load birthday data");
+        return false;
+    }
+
+    LOGI("Loaded birthday data");
+    return true;
+}
+
+bool save_bd_data()
+{
+    bool ret = store_nvs_write_str(NVS_NAMESPACE, NVS_BD_LIST, bd_data);
+    if(ret) LOGI("Saved birthday data");
+    else LOGE("Failed to save birthday data");
+    return ret;
+}
+
+bool erase_bd_data()
+{
+    bool ret = store_nvs_erase_key(NVS_NAMESPACE, NVS_BD_LIST);
+    if(ret) LOGI("Erased birthday data");
+    else LOGE("Failed to erase birthday data");
+    return ret;
+}
+
+bool line_to_bd_info(char* str, birthday_t* b)
+{
+    // char name[30] = {0};
+    // int month = 0, day = 0, year = 0;
+    birthday_t bd = {0};
+
+    int obj = 0;
+    char buf[30] = {0};
+    int idx = 0;
+
+    int len = strlen(str);
+    for(int i = 0; i < len; ++i)
+    {
+        char c = str[i];
+        if(c != ',') buf[idx++] = c;
+    
+        if(c == ',' || i == (len-1))
+        {
+            if(obj == 0) //name
+            {
+                if(strlen(buf) == 0)
+                {
+                    printf("parse name failed -> %s\n", str);
+                    return false;
+                }
+                memcpy(bd.name, buf, MIN(30,strlen(buf)));
+            }
+            else if(obj == 1) //month
+            {
+                int month = atoi(buf);
+                if(month <= 0 || month > 12)
+                {
+                    printf("parse month failed -> %s\n", str);
+                    return false;
+                }
+                bd.month = (uint8_t)month;
+            }
+            else if(obj == 2) //day
+            {
+                int day = atoi(buf);
+                if(day <= 0 || day > 31)
+                {
+                    printf("parse day failed -> %s\n", str);
+                    return false;
+                }
+                bd.day = (uint8_t)day;
+            }
+
+            obj++;
+            if(obj > 2)
+            {
+                bd.yday = get_day_of_year(bd.month, bd.day);
+                if(bd.yday == 0) return false;
+
+                if(b != NULL) memcpy(b, &bd, sizeof(birthday_t));
+                return true;
+            }
+
+            memset(buf, 0, 30);
+            idx = 0;
+        }
+
+    }
+
+    return false;
+}
+
+void parse_bd_data()
+{
+    if(bd_data == NULL) return;
+
+    char buf[100] = {0};
+    int idx = 0;
+
+    bd_list_count = 0;
+
+    int len = strlen(bd_data);
+    for(int i = 0; i < len; ++i)
+    {
+        char c = bd_data[i];
+
+        if(c != '\n') buf[idx++] = c;
+
+        if(c == '\n' || i == (len-1))
+        {
+            birthday_t bd = {0};
+            bool ret = line_to_bd_info(buf, &bd);
+
+            if(ret)
+            {
+                bool add = true;
+                for(int k = 0; k < bd_list_count; ++k)
+                {
+                    if(memcmp(&bd_list[k], &bd, sizeof(birthday_t)) == 0)
+                    {
+                        printf("duplicate -> %s\n", buf);
+                        add = false;
+                        break;
+                    }
+                }
+
+                if(add)
+                {
+                    memcpy(&bd_list[bd_list_count++], &bd, sizeof(birthday_t));
+                }
+
+            }
+
+            memset(buf,0,100);
+            idx = 0;
+            continue;
+        }
+    }
+
+    LOGI("Birthday list count: %d", bd_list_count);
+    for(int i = 0; i < bd_list_count; ++i)
+    {
+        birthday_t* b = &bd_list[i];
+        LOGI("%u -> %s %u/%u", b->yday, b->name, b->month, b->day);
+    }
+
+    rank_bd_list();
+
+}
+
+
+void swap_b(birthday_t* a, birthday_t* b)
+{
+    birthday_t temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void bubble_sort_bd_list()
+{
+    int i, j;
+    for(i = 0; i < bd_list_count-1; i++)
+    {
+        for(j = 0; j < bd_list_count-i-1; j++)
+        {
+            // want the negative numbers to wrap
+            uint16_t n1 = bd_list[j].yday - yday;
+            uint16_t n2 = bd_list[j+1].yday - yday;
+
+            if(n1 > n2)
+                swap_b(&bd_list[j], &bd_list[j+1]);
+        }
+    }
+}
+
+
+void rank_bd_list()
+{
+    if(bd_list_count < 0)
+    {
+        refresh_bd_rank = false;
+        return;
+    }
+
+    if(yday == 0) return;
+
+    bubble_sort_bd_list();
+    LOGI("SORTED:");
+    for(int i = 0; i < bd_list_count; ++i)
+    {
+        birthday_t* b = &bd_list[i];
+        LOGI("%u %u -> %s %u/%u ", b->yday, (uint16_t)(b->yday - yday), b->name, b->month, b->day);
+    }
+    refresh_bd_rank = false;
 }

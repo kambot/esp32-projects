@@ -176,6 +176,7 @@ struct tm time_tm_from_timestamp(long long timestamp, uint16_t base_year);
 time_t time_timestamp_from_tm(struct tm time_info, uint16_t base_year);
 
 
+uint16_t get_day_of_year(uint8_t month, uint8_t day);
 
 
 // %a  Abbreviated weekday name  Sun
@@ -200,3 +201,4 @@ time_t time_timestamp_from_tm(struct tm time_info, uint16_t base_year);
 // %Y  Year  2012
 // %Z  Timezone name or abbreviation  CDT
 // %%  A % sign  %
+

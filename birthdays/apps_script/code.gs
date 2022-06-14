@@ -10,25 +10,39 @@
  ******************************************************************** 
 */
 
+function enc(str)
+{
+    var encoded = [];
+    for (i=0; i<str.length;i++) {
+        var a = str.charCodeAt(i);
+        var b = ~(a ^ 0xAA) & 0xFF;
+        encoded.push(b);
+    }
+    return encoded;
+}
+
+function hexstring(lst)
+{
+  var hexString = lst
+      .map(function(byte) {
+          // Convert from 2's compliment
+          var v = (byte < 0) ? 256 + byte : byte;
+          // Convert byte to hexadecimal
+          return ("0" + v.toString(16)).slice(-2);
+      })
+      .join("");
+  return hexString;
+}
+
+
 function debug()
 {
 
   let sheets_file = SpreadsheetApp.getActive();
-  let sheet = sheets_file.getSheetByName("test");
-  let x = sheet.getRange('A1').getValue();
-  x += "\n";
-  x += sheet.getRange('A1').getValue();
-
-  //let cols = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-
+  let sheet = sheets_file.getSheetByName("data");
   let ncols = sheet.getLastColumn();
   let nrows = sheet.getLastRow();
-
-  x+="\n";
-  x+=ncols;
-
   let cell = sheet.getRange('a1');
-
   let output = "";
 
   for (var i = 0; i < nrows; ++i)
@@ -47,10 +61,18 @@ function debug()
     }
   }
 
-  console.log(output);
+  //console.log(output);
+
+  var output_enc = enc(output);
+  //console.log(output_enc);
+
+  var output_enc_hex = hexstring(output_enc);
+  console.log(output_enc_hex);
+
   return;
 
-
+  //var signature = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, output);
+  //console.log(signature);
 
   let current_date = new Date(1642622469*1000);
 
@@ -72,21 +94,10 @@ function debug()
 function doGet(e)
 {
   let sheets_file = SpreadsheetApp.getActive();
-  let sheet = sheets_file.getSheetByName("test");
-  let x = sheet.getRange('A1').getValue();
-  x += "\n";
-  x += sheet.getRange('A1').getValue();
-
-  //let cols = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-
+  let sheet = sheets_file.getSheetByName("data");
   let ncols = sheet.getLastColumn();
   let nrows = sheet.getLastRow();
-
-  x+="\n";
-  x+=ncols;
-
   let cell = sheet.getRange('a1');
-
   let output = "";
 
   for (var i = 0; i < nrows; ++i)
@@ -106,10 +117,13 @@ function doGet(e)
   }
 
   //console.log(output);
-  //var params = JSON.stringify(e);
-  //return HtmlService.createHtmlOutput(params);
 
-  return ContentService.createTextOutput(output);
+  var output_enc = enc(output);
+  //console.log(output_enc);
+
+  var output_enc_hex = hexstring(output_enc);
+  //console.log(output_enc_hex);
+
+  return ContentService.createTextOutput(output_enc_hex);
 }
 
- 
