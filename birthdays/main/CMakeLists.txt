@@ -6,6 +6,11 @@ idf_component_register(
                         "base64.c"
                         "wifi.c"
                         "https.c"
+                        "i2c.c"
+                        "font_glcd_5x7.c"
+                        "font_tahoma_8pt.c"
+                        "fonts.c"
+                        "oled.c"
 
                     INCLUDE_DIRS
                         "."

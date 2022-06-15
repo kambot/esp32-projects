@@ -148,9 +148,8 @@ typedef struct
     char name[31];
     uint8_t month;
     uint8_t day;
-    // uint8_t year;
     uint16_t yday; //1 based
-    // uint8_t rank;
+    uint16_t countdown;
 } birthday_t;
 
 // time since boot (in seconds)
@@ -182,6 +181,8 @@ bool mac_str_to_bytes(char* mac_str, uint8_t ret_bytes[6], bool has_colons);
 bool str_append(char* str, int max_len, const char* format, ...);
 
 
+// download data -> decrypt -> parse -> sort/rank
+
 bool hexstr_to_bytes(char* hexstr, uint8_t* ret_bytes);
 char* decrypt_data(char* hexstr);
 
@@ -191,6 +192,8 @@ bool erase_bd_data();
 
 bool line_to_bd_info(char* str, birthday_t* b);
 void parse_bd_data();
+uint16_t days_until_next_bd(uint8_t _month, uint8_t _day, uint16_t _year);
+void print_birthday_t(birthday_t* b);
+void swap_bd(birthday_t* a, birthday_t* b);
+void bubble_sort_bd_list();
 void rank_bd_list();
-
-// download data -> decrypt -> parse -> sort/rank

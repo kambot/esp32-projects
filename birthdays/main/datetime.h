@@ -34,11 +34,21 @@
 // MACROS
 // ====================================================================
 
+#define TIME_UPDATED_ONCE()    (tm_gmt.tm_year >= TIME_TM_TEST_YEAR)
+
 #define TIME_NOW()      time_now(TIME_EPOCH) /**< Current timestamp */
+
+// ====================================================================
+// GLOBAL VARS
+// ====================================================================
+
+extern struct tm tm_local;
+extern struct tm tm_gmt;
 
 // ====================================================================
 // GLOBAL FUNCTIONS
 // ====================================================================
+
 
 ///
 /// @brief Initialize the SNTP functionality
@@ -176,7 +186,11 @@ struct tm time_tm_from_timestamp(long long timestamp, uint16_t base_year);
 time_t time_timestamp_from_tm(struct tm time_info, uint16_t base_year);
 
 
-uint16_t get_day_of_year(uint8_t month, uint8_t day);
+uint16_t get_day_of_year(uint8_t month, uint8_t day, uint16_t year);
+int get_num_leap_years(int start_year, int end_year); // doesn't include end year in count
+bool is_leap_year(int year);
+int get_days_in_month(int month, int year);
+int get_days_in_month2(int month);
 
 
 // %a  Abbreviated weekday name  Sun

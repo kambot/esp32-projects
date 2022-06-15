@@ -24,6 +24,9 @@ https://script.google.com/home/projects/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEATW75
 #include "datetime.h"
 #include "wifi.h"
 #include "https.h"
+#include "i2c.h"
+#include "fonts.h"
+#include "oled.h"
 
 
 // ====================================================================
@@ -39,13 +42,14 @@ uint8_t bt_mac_address[6] = {0};
 
 char* bd_data = NULL; // string (csv format)
 
-#define BD_LIST_MAX 100
+#define BD_LIST_MAX 300
 birthday_t bd_list[BD_LIST_MAX] = {0};
 int bd_list_count = 0;
 
 bool refresh_bd_rank = true;
 
 int yday = 0;
+int year = 0;
 
 
 // ====================================================================
@@ -67,15 +71,19 @@ void birthdays_task(void* arg);
 void IRAM_ATTR timer_cb(void* arg);
 
 
-
 // ====================================================================
 // MAIN
 // ====================================================================
 
 void app_main()
 {
+
+
     init();
     print_task_list();
+
+    set_line_scrolling(1, "fuck you", 0, 0, 0, INF, 3, true);
+
 
     // //TEST
     // for(;;)
@@ -102,8 +110,8 @@ void birthdays_task(void* arg)
     // wait for sntp sync
     for(;;)
     {
-        if(TIME_NOW() != 0) break;
-        delay(100);
+        if(yday != 0) break;
+        delay(200);
     }
 
     load_bd_data();
@@ -155,6 +163,7 @@ void IRAM_ATTR timer_cb(void* arg)
     {
         struct tm t = time_now_tm_local();
         int _yday = t.tm_yday+1;
+        year = t.tm_year+1900;
 
         if(yday != _yday)
         {
@@ -162,10 +171,7 @@ void IRAM_ATTR timer_cb(void* arg)
             yday = _yday;
             refresh_bd_rank = true;
         }
-
     }
-
-
 }
 
 
@@ -195,7 +201,7 @@ void init()
 
     store_nvs_init();
 
-    time_init(TIME_DEFAULT_SYNC_PERIOD);
+    time_init(30*60);
     time_set_timezone_id(TIME_ZONE);
 
     wifi_init();
@@ -204,12 +210,13 @@ void init()
     // wifi_debug_logs(true);
 
     wifi_load_credentials();
-    wifi_set_all("STUDIO_1837_CORP", "soap4life", 3, WIFI_CONTEXT_PRIMARY);    // temp
+    wifi_set_all("STUDIO_1837_CORP", "soap4life", 3, WIFI_CONTEXT_PRIMARY);
 
     wifi_enable();
     wifi_connect(); // must always call this after setting wifi credentials
 
-
+    oled_init();
+    ssd1306_select_font(0);
 
     bd_task_cg.task_func = birthdays_task;
     bd_task_cg.task_name = "birthdays_task";
@@ -569,7 +576,7 @@ bool line_to_bd_info(char* str, birthday_t* b)
             {
                 if(strlen(buf) == 0)
                 {
-                    printf("parse name failed -> %s\n", str);
+                    LOGW("parse name failed -> %s", str);
                     return false;
                 }
                 memcpy(bd.name, buf, MIN(30,strlen(buf)));
@@ -579,7 +586,7 @@ bool line_to_bd_info(char* str, birthday_t* b)
                 int month = atoi(buf);
                 if(month <= 0 || month > 12)
                 {
-                    printf("parse month failed -> %s\n", str);
+                    LOGW("parse month failed -> %s", str);
                     return false;
                 }
                 bd.month = (uint8_t)month;
@@ -589,7 +596,7 @@ bool line_to_bd_info(char* str, birthday_t* b)
                 int day = atoi(buf);
                 if(day <= 0 || day > 31)
                 {
-                    printf("parse day failed -> %s\n", str);
+                    LOGW("parse day failed -> %s", str);
                     return false;
                 }
                 bd.day = (uint8_t)day;
@@ -598,7 +605,7 @@ bool line_to_bd_info(char* str, birthday_t* b)
             obj++;
             if(obj > 2)
             {
-                bd.yday = get_day_of_year(bd.month, bd.day);
+                bd.yday = get_day_of_year(bd.month, bd.day, year);
                 if(bd.yday == 0) return false;
 
                 if(b != NULL) memcpy(b, &bd, sizeof(birthday_t));
@@ -642,7 +649,7 @@ void parse_bd_data()
                 {
                     if(memcmp(&bd_list[k], &bd, sizeof(birthday_t)) == 0)
                     {
-                        printf("duplicate -> %s\n", buf);
+                        LOGW("duplicate -> %s", buf);
                         add = false;
                         break;
                     }
@@ -652,7 +659,6 @@ void parse_bd_data()
                 {
                     memcpy(&bd_list[bd_list_count++], &bd, sizeof(birthday_t));
                 }
-
             }
 
             memset(buf,0,100);
@@ -665,15 +671,42 @@ void parse_bd_data()
     for(int i = 0; i < bd_list_count; ++i)
     {
         birthday_t* b = &bd_list[i];
-        LOGI("%u -> %s %u/%u", b->yday, b->name, b->month, b->day);
+        print_birthday_t(b);
     }
 
     rank_bd_list();
+}
 
+// year is current year
+uint16_t days_until_next_bd(uint8_t _month, uint8_t _day, uint16_t _year)
+{
+    uint16_t bd_yday = get_day_of_year(_month, _day, year);
+
+    int check = bd_yday - yday;
+    if(check >= 0)
+    {
+        return (uint16_t)check;
+    }
+
+    int days_in_curr_year = 365;
+    if(is_leap_year(_year))
+    {
+        days_in_curr_year = 366;
+    }
+
+    int rem_days = days_in_curr_year - yday;
+    uint16_t days = rem_days + bd_yday;
+    return days;
+}
+
+void print_birthday_t(birthday_t* b)
+{
+    if(b == NULL) return;
+    LOGI("%-20s %2u/%-2u (%-3u, %-3u)", b->name, b->month, b->day, b->yday, b->countdown);
 }
 
 
-void swap_b(birthday_t* a, birthday_t* b)
+void swap_bd(birthday_t* a, birthday_t* b)
 {
     birthday_t temp = *a;
     *a = *b;
@@ -682,17 +715,24 @@ void swap_b(birthday_t* a, birthday_t* b)
 
 void bubble_sort_bd_list()
 {
-    int i, j;
-    for(i = 0; i < bd_list_count-1; i++)
+
+    for(int i = 0; i < bd_list_count; ++i)
     {
-        for(j = 0; j < bd_list_count-i-1; j++)
+        bd_list[i].countdown = days_until_next_bd(bd_list[i].month, bd_list[i].day, year);
+    }
+
+    for(int i = 0; i < bd_list_count-1; i++)
+    {
+        for(int j = 0; j < bd_list_count-i-1; j++)
         {
             // want the negative numbers to wrap
-            uint16_t n1 = bd_list[j].yday - yday;
-            uint16_t n2 = bd_list[j+1].yday - yday;
+            // uint16_t n1 = bd_list[j].yday - yday;
+            // uint16_t n2 = bd_list[j+1].yday - yday;
+            uint16_t n1 = bd_list[j].countdown;
+            uint16_t n2 = bd_list[j+1].countdown;
 
             if(n1 > n2)
-                swap_b(&bd_list[j], &bd_list[j+1]);
+                swap_bd(&bd_list[j], &bd_list[j+1]);
         }
     }
 }
@@ -713,7 +753,8 @@ void rank_bd_list()
     for(int i = 0; i < bd_list_count; ++i)
     {
         birthday_t* b = &bd_list[i];
-        LOGI("%u %u -> %s %u/%u ", b->yday, (uint16_t)(b->yday - yday), b->name, b->month, b->day);
+        print_birthday_t(b);
     }
     refresh_bd_rank = false;
 }
+

@@ -18,8 +18,7 @@
 // MACROS
 // ====================================================================
 
-#define TIME_TM_TEST_YEAR  (2016-1900)
-#define TIME_UPDATED_ONCE()    (tm_gmt.tm_year >= TIME_TM_TEST_YEAR)
+#define TIME_TM_TEST_YEAR  (2022-1900)
 
 // ====================================================================
 // TIMEZONE DATA
@@ -30,35 +29,36 @@
 static const char* timezone_data = "America/New_York;EST5EDT,M3.2.0,M11.1.0\n";
 
 // ====================================================================
+// GLOBAL VARIABLES
+// ====================================================================
+
+struct tm tm_local = {};
+struct tm tm_gmt = {};
+
+// ====================================================================
 // STATIC VARIABLES
 // ====================================================================
 
-static EXT_RAM_ATTR struct tm tm_local = {};
-static EXT_RAM_ATTR struct tm tm_gmt = {};
-static EXT_RAM_ATTR time_t now = 0;
-static EXT_RAM_ATTR bool timezone_set = false;
+static time_t now = 0;
+static bool timezone_set = false;
 
-static EXT_RAM_ATTR bool is_sntp_initialized = false;
-static EXT_RAM_ATTR bool is_sntp_running = false;
-static EXT_RAM_ATTR int sntp_sync_interval = 0;
-static EXT_RAM_ATTR bool sntp_success = false;
-static EXT_RAM_ATTR int64_t last_try_time = 0;
-static EXT_RAM_ATTR char server_address[TIME_SERVER_STR_MAX_SIZE] = {};
+static bool is_sntp_initialized = false;
+static bool is_sntp_running = false;
+static int sntp_sync_interval = 0;
+static bool sntp_success = false;
+static int64_t last_try_time = 0;
+static char server_address[TIME_SERVER_STR_MAX_SIZE] = {};
 
-static EXT_RAM_ATTR int64_t last_update_time = 0;
+static int64_t last_update_time = 0;
 
 #if IDF_VERSION_MAJOR_MINOR <= 40
-static EXT_RAM_ATTR esp_timer_handle_t sync_timer = NULL;
+static esp_timer_handle_t sync_timer = NULL;
 #endif
 
 // ====================================================================
 // STATIC PROTOTYPES
 // ====================================================================
 
-static bool is_leap_year(int year);
-static int get_num_leap_years(int start_year, int end_year);
-static int get_days_in_month(int month, int year);
-static int get_days_in_month2(int month);
 static void time_updater();
 static time_t time_get_timestamp(struct tm time_info, uint16_t base_year);
 static void time_format_timeinfo(struct tm time_info, const char* format, char* ret_str, bool gmt);
@@ -530,7 +530,7 @@ time_t time_timestamp_from_tm(struct tm time_info, uint16_t base_year)
 // other
 
 // 1 based
-uint16_t get_day_of_year(uint8_t month, uint8_t day)
+uint16_t get_day_of_year(uint8_t month, uint8_t day, uint16_t year)
 {
     if(!TIME_UPDATED_ONCE()) return 0;
     if(day > get_days_in_month(month, tm_local.tm_year+1900)) return 0;
@@ -547,28 +547,8 @@ uint16_t get_day_of_year(uint8_t month, uint8_t day)
     return days;
 }
 
-// ====================================================================
-// STATIC FUNCTIONS
-// ====================================================================
-
-#if IDF_VERSION_MAJOR_MINOR <= 40
-static void IRAM_ATTR sync_timer_cb(void* arg)
-{
-    time_update_time(0);
-}
-#endif
-
-
-static bool is_leap_year(int year)
-{
-    if(year % 4 > 0) return false;
-    else if(year % 100 > 0) return true;
-    else if(year % 400 > 0) return false;
-    else return true;
-}
-
 // doesn't include end year in count
-static int get_num_leap_years(int start_year, int end_year)
+int get_num_leap_years(int start_year, int end_year)
 {
     int num_leap_years = 0;
     for(int i = start_year; i < end_year; ++i) {
@@ -577,7 +557,15 @@ static int get_num_leap_years(int start_year, int end_year)
     return num_leap_years;
 }
 
-static int get_days_in_month(int month, int year)
+bool is_leap_year(int year)
+{
+    if(year % 4 > 0) return false;
+    else if(year % 100 > 0) return true;
+    else if(year % 400 > 0) return false;
+    else return true;
+}
+
+int get_days_in_month(int month, int year)
 {
     switch (month) {
         case 1:  return 31;
@@ -596,7 +584,7 @@ static int get_days_in_month(int month, int year)
     return 0;
 }
 
-static int get_days_in_month2(int month)
+int get_days_in_month2(int month)
 {
     switch (month) {
         case 1:  return 31;
@@ -614,6 +602,18 @@ static int get_days_in_month2(int month)
     }
     return 0;
 }
+// ====================================================================
+// STATIC FUNCTIONS
+// ====================================================================
+
+#if IDF_VERSION_MAJOR_MINOR <= 40
+static void IRAM_ATTR sync_timer_cb(void* arg)
+{
+    time_update_time(0);
+}
+#endif
+
+
 
 static void time_updater()
 {
