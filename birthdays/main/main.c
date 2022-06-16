@@ -36,8 +36,8 @@ https://script.google.com/home/projects/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEATW75
 
 esp_timer_handle_t timer_handle;
 esp_timer_handle_t sensor_timer_handle;
-task_data_t gui_task_cg = {0};
-task_data_t bd_task_cg = {0};
+task_data_t gui_task_cfg = {0};
+task_data_t bd_task_cfg = {0};
 uint8_t mac_address[6] = {0};
 uint8_t bt_mac_address[6] = {0};
 
@@ -53,11 +53,18 @@ bool bd_list_updated = false;
 int yday = 0;
 int year = 0;
 
+int64_t download_timer = 0;
 bool downloading_data = false;
 bool update_gui_date = false;
 bool selection_changed = false;
 int sel_idx = 0;
 int sel_bd_idx = 0;
+
+
+int64_t enter_dev_mode_timer = -1e12;
+bool dev_mode = false;
+bool enter_dev_mode = false;
+bool exit_dev_mode = false;
 
 // ====================================================================
 // MACROS/DEFINES
@@ -84,6 +91,8 @@ void IRAM_ATTR timer_cb(void* arg);
 
 // button
 void btn_single_press();
+void btn_double_press();
+void btn_hold_dev_mode();
 
 // gui
 void gui_task(void* arg);
@@ -142,19 +151,19 @@ void init()
     wifi_connect(); // must always call this after setting wifi credentials
 
 
-    gui_task_cg.task_func = gui_task;
-    gui_task_cg.task_name = "gui_task";
-    gui_task_cg.config.core = 0;
-    gui_task_cg.config.priority = 11;
-    gui_task_cg.config.stack_size = 5000;
-    create_task(gui_task_cg);
+    gui_task_cfg.task_func = gui_task;
+    gui_task_cfg.task_name = "gui_task";
+    gui_task_cfg.config.core = 0;
+    gui_task_cfg.config.priority = 11;
+    gui_task_cfg.config.stack_size = 5000;
+    create_task(gui_task_cfg);
 
-    bd_task_cg.task_func = birthdays_task;
-    bd_task_cg.task_name = "birthdays_task";
-    bd_task_cg.config.core = 1;
-    bd_task_cg.config.priority = 10;
-    bd_task_cg.config.stack_size = 5000;
-    create_task(bd_task_cg);
+    bd_task_cfg.task_func = birthdays_task;
+    bd_task_cfg.task_name = "birthdays_task";
+    bd_task_cfg.config.core = 1;
+    bd_task_cfg.config.priority = 10;
+    bd_task_cfg.config.stack_size = 5000;
+    create_task(bd_task_cfg);
 
     esp_timer_create_args_t timer_args = {};
     timer_args.callback = &timer_cb;
@@ -172,7 +181,9 @@ void init()
     button_init(btn_cfg, 1, 5);
     button_config_pin(PIN_MASK(BTN_PIN), 0);
     button_add_event_press(PIN_MASK(BTN_PIN), PRESSES, 1, btn_single_press);
+    button_add_event_press(PIN_MASK(BTN_PIN), PRESSES_EXACT, 2, btn_double_press);
     button_add_event_hold_mod(PIN_MASK(BTN_PIN), 1000, 1000000, 300, btn_single_press);
+    button_add_event_hold(PIN_MASK(BTN_PIN), 1000, 2000, btn_hold_dev_mode, btn_hold_dev_mode, btn_hold_dev_mode);
 }
 
 
@@ -190,20 +201,11 @@ void birthdays_task(void* arg)
     load_bd_data();
     parse_bd_data();
 
-    // char buf[100] = {0};
-    // sprintf(buf, "%s %u/%u (%u)", bd_list[0].name, bd_list[0].month, bd_list[0].day, bd_list[0].countdown);
-    // set_line_scrolling(0, buf, 0,0, 0, INF, 3, true);
-    // set_line_no_scroll(1, buf, 0, 16, false);
-
-    // set_line_textf(0, "%s test", ICON_WIFI_DISCONNECTED);
-
-
-    static int64_t refresh_timer = 0;
 
     for(;;)
     {
 
-        if(wifi_get_internet_status() && esp_timer_get_time() >= refresh_timer)
+        if(wifi_get_internet_status() && esp_timer_get_time() >= download_timer)
         {
             // if this is successful, it will also update bd_data and store to NVS partition
             downloading_data = true;
@@ -212,11 +214,11 @@ void birthdays_task(void* arg)
 
             if(ret)
             {
-                refresh_timer = esp_timer_get_time() + BD_DOWNLOAD_SECONDS*1e6;
+                download_timer = esp_timer_get_time() + BD_DOWNLOAD_SECONDS*1e6;
             }
             else
             {
-                refresh_timer = esp_timer_get_time() + 10*1e6;
+                download_timer = esp_timer_get_time() + 10*1e6;
             }
 
         }
@@ -775,22 +777,46 @@ void rank_bd_list()
 
 void btn_single_press()
 {
-
-    if(bd_list_count > 0)
+    if(dev_mode || enter_dev_mode)
     {
-        sel_idx++;
-        if(sel_idx >= 2) sel_idx = 0;
-
-        sel_bd_idx++;
-        if(sel_bd_idx >= bd_list_count)
-        {
-            sel_bd_idx = 0;
-            sel_idx = 0;
-        }
-
-        selection_changed = true;
+        // printf("exit_dev_mode = true\n");
+        exit_dev_mode = true;
     }
+    else
+    {
+        if(bd_list_count > 0)
+        {
+            sel_idx++;
+            if(sel_idx >= 2) sel_idx = 0;
 
+            sel_bd_idx++;
+            if(sel_bd_idx >= bd_list_count)
+            {
+                sel_bd_idx = 0;
+                sel_idx = 0;
+            }
+            selection_changed = true;
+        }
+    }
+}
+
+void btn_double_press()
+{
+    if((esp_timer_get_time() - enter_dev_mode_timer) <= 2e6)
+    {
+        // printf("enter_dev_mode = true\n");
+        enter_dev_mode = true;
+    }
+    else
+    {
+        download_timer = 0;
+    }
+}
+
+void btn_hold_dev_mode()
+{
+    // printf("set enter_dev_mode_timer\n");
+    enter_dev_mode_timer = esp_timer_get_time();
 }
 
 
@@ -831,6 +857,74 @@ void btn_single_press()
 #define BD2_X   0
 #define BD2_Y   48
 
+struct
+{
+    bool enabled;
+    uint8_t frames1[5];
+    uint8_t frames2[5];
+    uint8_t frame_counter;
+    uint8_t frame_index;
+    uint8_t speed;
+    int8_t x;
+    uint8_t y;
+    int8_t dir;
+} running_man;
+
+void handle_running_man()
+{
+    if(!running_man.enabled) return;
+
+    // update the frames
+    running_man.frame_counter += running_man.speed;
+    if(running_man.frame_counter >= 1) {
+        running_man.frame_counter = 0;
+        running_man.frame_index++;
+        if(running_man.frame_index >= 5)
+            running_man.frame_index = 0;
+    }
+
+    // update position
+    int x = (int)running_man.x;
+    x += running_man.speed * running_man.dir;
+    bool update_y = false;
+    if(running_man.dir == 1)
+    {
+        if(x > 127) {
+            running_man.dir = -1;
+            update_y = true;
+            x = 127;
+        }
+    }
+    else
+    {
+        if(x < -16) {
+            running_man.dir = 1;
+            update_y = true;
+            x = -16;
+        }
+    }
+    if(update_y) {
+        if(running_man.y == 16) running_man.y = 42;
+        else if(running_man.y == 42) running_man.y = 16;
+
+        running_man.speed = 3 + esp_random() % 10;
+    }
+    running_man.x = (uint8_t)x;
+
+    // draw
+    // display_select_font(FONT_TAHOMA);
+    ssd1306_clear();
+
+    if(running_man.dir == 1) {
+        ssd1306_draw_char(running_man.x, running_man.y, running_man.frames1[running_man.frame_index], false);
+        ssd1306_draw_char(running_man.x, running_man.y+11, running_man.frames2[running_man.frame_index], false);
+    } else {
+        ssd1306_draw_char(running_man.x, running_man.y, running_man.frames1[running_man.frame_index], true);
+        ssd1306_draw_char(running_man.x, running_man.y+11, running_man.frames2[running_man.frame_index], true);
+    }
+
+    ssd1306_refresh(true);
+}
 
 void gui_task(void* arg)
 {
@@ -852,71 +946,125 @@ void gui_task(void* arg)
     set_line_textf(CNT_I, "%2d of %-2d", 0, bd_list_count);
 
 
+
+    running_man.enabled = false;
+    running_man.frames1[0] = '\x90';
+    running_man.frames2[0] = '\x91';
+    running_man.frames1[1] = '\x92';
+    running_man.frames2[1] = '\x93';
+    running_man.frames1[2] = '\x94';
+    running_man.frames2[2] = '\x95';
+    running_man.frames1[3] = '\x96';
+    running_man.frames2[3] = '\x97';
+    running_man.frames1[4] = '\x98';
+    running_man.frames2[4] = '\x99';
+    running_man.frame_counter = 0;
+    running_man.frame_index = 0;
+    running_man.speed = 3;
+    running_man.x = 0;
+    running_man.y = 16;
+    running_man.dir = 1;
+
     for(;;)
     {
 
 
-        if(bd_list_updated)
+        if(enter_dev_mode)
         {
-            set_line_textf(CNT_I, "%2d of %-2d", bd_list_count > 0 ? 1 : 0, bd_list_count);
+            pause_animations();
+            ssd1306_clear();
 
-            sel_idx = 0;
-            sel_bd_idx = 0;
-            selection_changed = true;
-            bd_list_updated = false;
+            enter_dev_mode = false;
+            dev_mode = true;
+
+            running_man.enabled = true;
+            running_man.frame_counter = 0;
+            running_man.frame_index = 0;
+            running_man.speed = 3;
+            running_man.x = 0;
+            running_man.y = 16;
+            running_man.dir = 1;
         }
 
-        if(selection_changed)
+        if(exit_dev_mode)
         {
-            LOGI("sel_idx: %d, sel_bd_idx, %d", sel_idx, sel_bd_idx);
+            resume_animations();
+            refresh_lines();
+            exit_dev_mode = false;
+            dev_mode = false;
+            running_man.enabled = false;
+        }
 
-            set_line_textf(CNT_I, "%2d of %-2d", bd_list_count > 0 ? sel_bd_idx+1 : 0, bd_list_count);
+        if(dev_mode)
+        {
 
-            if(bd_list_count > 0)
+            handle_running_man();
+
+        }
+        else
+        {
+            if(bd_list_updated)
             {
-                if(sel_idx == 0)
-                {
-                    set_line_textf(BD1_I, SELECTED " %s", bd_list[sel_bd_idx].name);
+                set_line_textf(CNT_I, "%2d of %-2d", bd_list_count > 0 ? 1 : 0, bd_list_count);
 
-                    if((sel_bd_idx+1) < bd_list_count)
+                sel_idx = 0;
+                sel_bd_idx = 0;
+                selection_changed = true;
+                bd_list_updated = false;
+            }
+
+            if(selection_changed)
+            {
+                LOGI("sel_idx: %d, sel_bd_idx, %d", sel_idx, sel_bd_idx);
+
+                set_line_textf(CNT_I, "%2d of %-2d", bd_list_count > 0 ? sel_bd_idx+1 : 0, bd_list_count);
+
+                if(bd_list_count > 0)
+                {
+                    if(sel_idx == 0)
                     {
-                        set_line_textf(BD2_I, NOT_SELECTED " %s", bd_list[sel_bd_idx+1].name);
+                        set_line_textf(BD1_I, SELECTED " %s", bd_list[sel_bd_idx].name);
+
+                        if((sel_bd_idx+1) < bd_list_count)
+                        {
+                            set_line_textf(BD2_I, NOT_SELECTED " %s", bd_list[sel_bd_idx+1].name);
+                        }
+                        else
+                        {
+                            // at the end of the list
+                            set_line_textf(BD2_I, "");
+                        }
+
                     }
                     else
                     {
-                        // at the end of the list
-                        set_line_textf(BD2_I, "");
+                        set_line_textf(BD1_I, NOT_SELECTED " %s", bd_list[sel_bd_idx-1].name);
+                        set_line_textf(BD2_I, SELECTED " %s", bd_list[sel_bd_idx].name);
                     }
 
                 }
                 else
                 {
-                    set_line_textf(BD1_I, NOT_SELECTED " %s", bd_list[sel_bd_idx-1].name);
-                    set_line_textf(BD2_I, SELECTED " %s", bd_list[sel_bd_idx].name);
+                    set_line_textf(BD1_I, "");
+                    set_line_textf(BD2_I, "");
                 }
 
+                set_line_textf(BDD_I, "Birthday: %u/%u", bd_list[sel_bd_idx].month, bd_list[sel_bd_idx].day);
+                set_line_textf(DAYS_I, "Days: %u", bd_list[sel_bd_idx].countdown);
+
+                selection_changed = false;
             }
-            else
+
+            if(update_gui_date)
             {
-                set_line_textf(BD1_I, "");
-                set_line_textf(BD2_I, "");
+                struct tm t = time_now_tm_local();
+                set_line_textf(DATE_I, "%d/%d", t.tm_mon+1, t.tm_mday);
+                update_gui_date = false;
             }
 
-            set_line_textf(BDD_I, "Birthday: %u/%u", bd_list[sel_bd_idx].month, bd_list[sel_bd_idx].day);
-            set_line_textf(DAYS_I, "Days: %u", bd_list[sel_bd_idx].countdown);
-
-            selection_changed = false;
+            set_line_textf(WIFI_I, wifi_get_internet_status() ? ICON_WIFI_CONNECTED : ICON_WIFI_DISCONNECTED);
+            set_line_textf(DOWN_I, downloading_data ? ICON_DOWNLOAD : "");
         }
-
-        if(update_gui_date)
-        {
-            struct tm t = time_now_tm_local();
-            set_line_textf(DATE_I, "%d/%d", t.tm_mon+1, t.tm_mday);
-            update_gui_date = false;
-        }
-
-        set_line_textf(WIFI_I, wifi_get_internet_status() ? ICON_WIFI_CONNECTED : ICON_WIFI_DISCONNECTED);
-        set_line_textf(DOWN_I, downloading_data ? ICON_DOWNLOAD : "");
 
         delay(100);
     }

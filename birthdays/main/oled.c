@@ -172,6 +172,12 @@ void reset_all_lines()
         reset_line(i);
 }
 
+void refresh_lines()
+{
+    for(int i = 0; i < NUM_LINES; ++i)
+        lines[i].update = true;
+}
+
 void pause_animations()
 {
     animations_running = false;
@@ -202,6 +208,8 @@ static void animation_task()
                 ssd1306_clear();
                 for(int i = 0; i < NUM_LINES; ++i)
                 {
+                    if(strlen(lines[i].text) == 0) continue;
+
                     ssd1306_draw_string(lines[i].xc, lines[i].y, lines[i].text, lines[i].fg, lines[i].bg);
                     lines[i].update = false;
 
@@ -263,9 +271,6 @@ static void init_animations()
     xTaskCreatePinnedToCore(&animation_task, "animation_task", 4000, NULL, 2, NULL, 1);
     animations_running = true;
 }
-
-
-
 
 
 
@@ -755,7 +760,15 @@ void ssd1306_select_font(uint8_t idx)
 
 
 // return character width
-uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, ssd1306_color_t foreground, ssd1306_color_t background)
+
+
+uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, bool reversed)
+{
+    return ssd1306_draw_char2(x, y, c, SSD1306_COLOR_WHITE, SSD1306_COLOR_BLACK, reversed);
+}
+
+
+uint8_t ssd1306_draw_char2(uint8_t x, uint8_t y, char c, ssd1306_color_t foreground, ssd1306_color_t background, bool reversed)
 {
     uint8_t i, j;
     const uint8_t *bitmap;
@@ -769,17 +782,21 @@ uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, ssd1306_color_t foregrou
         c = ' ';
     c = c - ctx.font->char_start;   // c now become index to tables
     bitmap = ctx.font->bitmap + ctx.font->char_descriptors[(int)c].offset;
+    uint8_t w = ctx.font->char_descriptors[(int)c].width;
     for (j = 0; j < ctx.font->height; ++j)
     {
-        for (i = 0; i < ctx.font->char_descriptors[(int)c].width; ++i)
+        for (i = 0; i < w; ++i)
         {
             if (i % 8 == 0)
             {
-                line = bitmap[(ctx.font->char_descriptors[(int)c].width + 7) / 8 * j + i / 8]; // line data
+                line = bitmap[(w + 7) / 8 * j + i / 8]; // line data
             }
             if (line & 0x80)
             {
-                ssd1306_draw_pixel(x + i, y + j, foreground);
+                if(reversed)
+                    ssd1306_draw_pixel(x + (w-i), y + j, foreground);
+                else
+                    ssd1306_draw_pixel(x + i, y + j, foreground);
             }
             else
             {
@@ -790,7 +807,10 @@ uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, ssd1306_color_t foregrou
                         break;
                     case SSD1306_COLOR_WHITE:
                     case SSD1306_COLOR_BLACK:
-                        ssd1306_draw_pixel(x + i, y + j, background);
+                        if(reversed)
+                            ssd1306_draw_pixel(x + (w-i), y + j, background);
+                        else
+                            ssd1306_draw_pixel(x + i, y + j, background);
                         break;
                     case SSD1306_COLOR_INVERT:
                         // I don't know why I need invert background
@@ -802,7 +822,7 @@ uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, ssd1306_color_t foregrou
             line = line << 1;
         }
     }
-    return (ctx.font->char_descriptors[(int)c].width);
+    return (w);
 }
 
 
@@ -818,7 +838,7 @@ uint8_t ssd1306_draw_string(uint8_t x, uint8_t y, char *str, ssd1306_color_t for
 
     while (*str)
     {
-       x += ssd1306_draw_char(x, y, *str, foreground, background);
+       x += ssd1306_draw_char2(x, y, *str, foreground, background, false);
        ++str;
        if (*str)
            x += ctx.font->c;
