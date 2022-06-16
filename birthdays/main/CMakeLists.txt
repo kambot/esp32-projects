@@ -11,6 +11,7 @@ idf_component_register(
                         "font_tahoma_8pt.c"
                         "fonts.c"
                         "oled.c"
+                        "button.c"
 
                     INCLUDE_DIRS
                         "."

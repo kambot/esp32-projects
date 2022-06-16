@@ -27,6 +27,7 @@ https://script.google.com/home/projects/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEATW75
 #include "i2c.h"
 #include "fonts.h"
 #include "oled.h"
+#include "button.h"
 
 
 // ====================================================================
@@ -35,6 +36,7 @@ https://script.google.com/home/projects/1TVCEwkP_O5XrHciDdwkVNIRS8z6ZJPZ4kEATW75
 
 esp_timer_handle_t timer_handle;
 esp_timer_handle_t sensor_timer_handle;
+task_data_t gui_task_cg = {0};
 task_data_t bd_task_cg = {0};
 uint8_t mac_address[6] = {0};
 uint8_t bt_mac_address[6] = {0};
@@ -45,18 +47,28 @@ char* bd_data = NULL; // string (csv format)
 #define BD_LIST_MAX 300
 birthday_t bd_list[BD_LIST_MAX] = {0};
 int bd_list_count = 0;
-
 bool refresh_bd_rank = true;
+bool bd_list_updated = false;
 
 int yday = 0;
 int year = 0;
 
+bool downloading_data = false;
+bool update_gui_date = false;
+bool selection_changed = false;
+int sel_idx = 0;
+int sel_bd_idx = 0;
 
 // ====================================================================
 // MACROS/DEFINES
 // ====================================================================
 
 #define BD_DOWNLOAD_SECONDS  (10*60)
+
+#define BTN_PIN 27
+
+#define NOT_SELECTED "     "
+#define SELECTED     ICON_SELECTOR " "
 
 // ====================================================================
 // STATIC FUNCTION DECLARATIONS
@@ -70,6 +82,11 @@ void init();
 void birthdays_task(void* arg);
 void IRAM_ATTR timer_cb(void* arg);
 
+// button
+void btn_single_press();
+
+// gui
+void gui_task(void* arg);
 
 // ====================================================================
 // MAIN
@@ -77,103 +94,12 @@ void IRAM_ATTR timer_cb(void* arg);
 
 void app_main()
 {
-
-
     init();
     print_task_list();
 
-    set_line_scrolling(1, "fuck you", 0, 0, 0, INF, 3, true);
-
-
-    // //TEST
-    // for(;;)
-    // {
-    //     if(TIME_NOW() != 0)
-    //     {
-    //         struct tm t = time_now_tm_local();
-    //         printf("day:  %d\n", t.tm_mday);
-    //         printf("mon:  %d\n", t.tm_mon); //0 based
-    //         printf("year: %d\n", t.tm_year+1900);
-    //         printf("yday: %d\n", t.tm_yday);    //0 based
-    //         break;
-    //     }
-    //     delay(500);
-    // }
 
     vTaskDelete(NULL);
 }
-
-void birthdays_task(void* arg)
-{
-    LOGI("Entered birthday task");
-
-    // wait for sntp sync
-    for(;;)
-    {
-        if(yday != 0) break;
-        delay(200);
-    }
-
-    load_bd_data();
-    if(bd_data != NULL)
-    {
-        parse_bd_data();
-    }
-
-
-    static int64_t refresh_timer = 0;
-
-    for(;;)
-    {
-
-        if(wifi_get_internet_status() && esp_timer_get_time() >= refresh_timer)
-        {
-            // if this is successful, it will also update bd_data and store to NVS partition
-            bool ret = get_birthdays();
-
-            if(ret)
-            {
-                refresh_timer = esp_timer_get_time() + BD_DOWNLOAD_SECONDS*1e6;
-            }
-            else
-            {
-                refresh_timer = esp_timer_get_time() + 30*1e6;
-            }
-
-        }
-
-        if(refresh_bd_rank)
-        {
-            rank_bd_list();
-        }
-
-        delay(1000);
-    }
-
-    LOGI("Leaving birthday task");
-    vTaskDelete(NULL);
-}
-
-
-
-
-void IRAM_ATTR timer_cb(void* arg)
-{
-    if(TIME_NOW() != 0)
-    {
-        struct tm t = time_now_tm_local();
-        int _yday = t.tm_yday+1;
-        year = t.tm_year+1900;
-
-        if(yday != _yday)
-        {
-            LOGI("yday: %d -> %d", yday, _yday);
-            yday = _yday;
-            refresh_bd_rank = true;
-        }
-    }
-}
-
 
 void init()
 {
@@ -215,12 +141,17 @@ void init()
     wifi_enable();
     wifi_connect(); // must always call this after setting wifi credentials
 
-    oled_init();
-    ssd1306_select_font(0);
+
+    gui_task_cg.task_func = gui_task;
+    gui_task_cg.task_name = "gui_task";
+    gui_task_cg.config.core = 0;
+    gui_task_cg.config.priority = 11;
+    gui_task_cg.config.stack_size = 5000;
+    create_task(gui_task_cg);
 
     bd_task_cg.task_func = birthdays_task;
     bd_task_cg.task_name = "birthdays_task";
-    bd_task_cg.config.core = 0;
+    bd_task_cg.config.core = 1;
     bd_task_cg.config.priority = 10;
     bd_task_cg.config.stack_size = 5000;
     create_task(bd_task_cg);
@@ -237,6 +168,90 @@ void init()
         LOGE("Failed to start timer");
     }
 
+    button_params_t btn_cfg = BUTTON_DEFAULT_PARAMS();
+    button_init(btn_cfg, 1, 5);
+    button_config_pin(PIN_MASK(BTN_PIN), 0);
+    button_add_event_press(PIN_MASK(BTN_PIN), PRESSES, 1, btn_single_press);
+    button_add_event_hold_mod(PIN_MASK(BTN_PIN), 1000, 1000000, 300, btn_single_press);
+}
+
+
+void birthdays_task(void* arg)
+{
+    LOGI("Entered birthday task");
+
+    // wait for sntp sync
+    for(;;)
+    {
+        if(yday != 0) break;
+        delay(200);
+    }
+
+    load_bd_data();
+    parse_bd_data();
+
+    // char buf[100] = {0};
+    // sprintf(buf, "%s %u/%u (%u)", bd_list[0].name, bd_list[0].month, bd_list[0].day, bd_list[0].countdown);
+    // set_line_scrolling(0, buf, 0,0, 0, INF, 3, true);
+    // set_line_no_scroll(1, buf, 0, 16, false);
+
+    // set_line_textf(0, "%s test", ICON_WIFI_DISCONNECTED);
+
+
+    static int64_t refresh_timer = 0;
+
+    for(;;)
+    {
+
+        if(wifi_get_internet_status() && esp_timer_get_time() >= refresh_timer)
+        {
+            // if this is successful, it will also update bd_data and store to NVS partition
+            downloading_data = true;
+            bool ret = get_birthdays();
+            downloading_data = false;
+
+            if(ret)
+            {
+                refresh_timer = esp_timer_get_time() + BD_DOWNLOAD_SECONDS*1e6;
+            }
+            else
+            {
+                refresh_timer = esp_timer_get_time() + 10*1e6;
+            }
+
+        }
+
+        if(refresh_bd_rank)
+        {
+            rank_bd_list();
+        }
+
+        delay(1000);
+    }
+
+    LOGI("Leaving birthday task");
+    vTaskDelete(NULL);
+}
+
+
+
+
+void IRAM_ATTR timer_cb(void* arg)
+{
+    if(TIME_NOW() != 0)
+    {
+        struct tm t = time_now_tm_local();
+        int _yday = t.tm_yday+1;
+        year = t.tm_year+1900;
+
+        if(yday != _yday)
+        {
+            LOGI("yday: %d -> %d", yday, _yday);
+            yday = _yday;
+            refresh_bd_rank = true;
+            update_gui_date = true;
+        }
+    }
 }
 
 
@@ -556,8 +571,6 @@ bool erase_bd_data()
 
 bool line_to_bd_info(char* str, birthday_t* b)
 {
-    // char name[30] = {0};
-    // int month = 0, day = 0, year = 0;
     birthday_t bd = {0};
 
     int obj = 0;
@@ -737,7 +750,6 @@ void bubble_sort_bd_list()
     }
 }
 
-
 void rank_bd_list()
 {
     if(bd_list_count < 0)
@@ -756,5 +768,161 @@ void rank_bd_list()
         print_birthday_t(b);
     }
     refresh_bd_rank = false;
+    bd_list_updated = true;
 }
+
+// button
+
+void btn_single_press()
+{
+
+    if(bd_list_count > 0)
+    {
+        sel_idx++;
+        if(sel_idx >= 2) sel_idx = 0;
+
+        sel_bd_idx++;
+        if(sel_bd_idx >= bd_list_count)
+        {
+            sel_bd_idx = 0;
+            sel_idx = 0;
+        }
+
+        selection_changed = true;
+    }
+
+}
+
+
+
+
+// gui stuff
+
+#define WIFI_I  0
+#define WIFI_X  110
+#define WIFI_Y  0
+
+#define DOWN_I  1
+#define DOWN_X  95
+#define DOWN_Y  0
+
+#define DATE_I  2
+#define DATE_X  0
+#define DATE_Y  0
+
+#define CNT_I   3
+#define CNT_X   64
+#define CNT_Y   0
+
+//selected birthday date
+#define BDD_I   4
+#define BDD_X   0
+#define BDD_Y   16
+
+#define DAYS_I  5
+#define DAYS_X  80
+#define DAYS_Y  16
+
+#define BD1_I   6
+#define BD1_X   0
+#define BD1_Y   32
+
+#define BD2_I   7
+#define BD2_X   0
+#define BD2_Y   48
+
+
+void gui_task(void* arg)
+{
+    LOGI("Entered gui task");
+
+    oled_init();
+    ssd1306_select_font(FONT_TAHOMA);
+
+    set_line_no_scroll(WIFI_I, ICON_WIFI_DISCONNECTED, WIFI_X, WIFI_Y, false);
+    set_line_no_scroll(DOWN_I, "", DOWN_X, DOWN_Y, false);
+    set_line_no_scroll(DATE_I, "", DATE_X, DATE_Y, false);
+    set_line_no_scroll(CNT_I,  "", CNT_X,  CNT_Y,  true);
+    set_line_no_scroll(BDD_I,  "", BDD_X,  BDD_Y,  false);
+    set_line_no_scroll(DAYS_I, "", DAYS_X, DAYS_Y, false);
+    set_line_no_scroll(BD1_I,  "", BD1_X,  BD1_Y,  false);
+    set_line_no_scroll(BD2_I,  "", BD2_X,  BD2_Y,  false);
+
+
+    set_line_textf(CNT_I, "%2d of %-2d", 0, bd_list_count);
+
+
+    for(;;)
+    {
+
+
+        if(bd_list_updated)
+        {
+            set_line_textf(CNT_I, "%2d of %-2d", bd_list_count > 0 ? 1 : 0, bd_list_count);
+
+            sel_idx = 0;
+            sel_bd_idx = 0;
+            selection_changed = true;
+            bd_list_updated = false;
+        }
+
+        if(selection_changed)
+        {
+            LOGI("sel_idx: %d, sel_bd_idx, %d", sel_idx, sel_bd_idx);
+
+            set_line_textf(CNT_I, "%2d of %-2d", bd_list_count > 0 ? sel_bd_idx+1 : 0, bd_list_count);
+
+            if(bd_list_count > 0)
+            {
+                if(sel_idx == 0)
+                {
+                    set_line_textf(BD1_I, SELECTED " %s", bd_list[sel_bd_idx].name);
+
+                    if((sel_bd_idx+1) < bd_list_count)
+                    {
+                        set_line_textf(BD2_I, NOT_SELECTED " %s", bd_list[sel_bd_idx+1].name);
+                    }
+                    else
+                    {
+                        // at the end of the list
+                        set_line_textf(BD2_I, "");
+                    }
+
+                }
+                else
+                {
+                    set_line_textf(BD1_I, NOT_SELECTED " %s", bd_list[sel_bd_idx-1].name);
+                    set_line_textf(BD2_I, SELECTED " %s", bd_list[sel_bd_idx].name);
+                }
+
+            }
+            else
+            {
+                set_line_textf(BD1_I, "");
+                set_line_textf(BD2_I, "");
+            }
+
+            set_line_textf(BDD_I, "Birthday: %u/%u", bd_list[sel_bd_idx].month, bd_list[sel_bd_idx].day);
+            set_line_textf(DAYS_I, "Days: %u", bd_list[sel_bd_idx].countdown);
+
+            selection_changed = false;
+        }
+
+        if(update_gui_date)
+        {
+            struct tm t = time_now_tm_local();
+            set_line_textf(DATE_I, "%d/%d", t.tm_mon+1, t.tm_mday);
+            update_gui_date = false;
+        }
+
+        set_line_textf(WIFI_I, wifi_get_internet_status() ? ICON_WIFI_CONNECTED : ICON_WIFI_DISCONNECTED);
+        set_line_textf(DOWN_I, downloading_data ? ICON_DOWNLOAD : "");
+
+        delay(100);
+    }
+
+    LOGI("Leaving gui task");
+    vTaskDelete(NULL);
+}
+
 

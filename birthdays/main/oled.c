@@ -19,7 +19,7 @@
 // #define READ_STATUS     ((0 << 7) | (1 << 6))
 // #define READ_DATA       ((1 << 7) | (1 << 6))
 
-#define NUM_LINES 8
+#define NUM_LINES   20
 
 
 static oled_line lines[NUM_LINES] = {0};
@@ -79,7 +79,7 @@ void set_line(oled_line line_data, int index)
     // print_line_data(index);
 }
 
-void set_line_text(char* str, int index)
+void set_line_text(int index, char* str)
 {
     if(strcmp(lines[index].text, str) == 0)
         return;
@@ -90,15 +90,49 @@ void set_line_text(char* str, int index)
     lines[index].update = true;
 }
 
+void set_line_textf(int index, char* format, ...)
+{
+
+    char* str = NULL;
+
+    va_list args;
+    va_start(args, format);
+    int len = vasprintf(&str, format, args);
+    va_end(args);
+
+    if(len == -1)
+    {
+        LOGE("Failed to format string");
+        return;
+    }
+
+    if(strcmp(lines[index].text, str) == 0)
+    {
+        free(str);
+        return;
+    }
+
+    memset(lines[index].text,0,LINE_STR_LEN);
+    strncpy(lines[index].text,str,MIN(strlen(str),LINE_STR_LEN));
+    lines[index].len = ssd1306_measure_string(lines[index].text);
+    if(lines[index].centered)
+        lines[index].xc = lines[index].xu - lines[index].len/2;
+    lines[index].update = true;
+    free(str);
+}
+
 void set_line_no_scroll(int index, char *str, int x, uint8_t y, bool centered)
 {
     oled_line line = {0};
     reset_line(index);
     memset(line.text,0,LINE_STR_LEN);
     strncpy(line.text,str,MIN(strlen(str),LINE_STR_LEN));
+    line.len = ssd1306_measure_string(line.text);
+    line.xu = x;
     line.x = x;
-    if(centered)
-        line.x = 128/2 - ssd1306_measure_string(str)/2;
+    line.centered = centered;
+    if(line.centered)
+        line.x = line.xu - line.len/2;
     line.y = y;
     line.fg = SSD1306_COLOR_WHITE;
     line.bg = SSD1306_COLOR_BLACK;
@@ -113,12 +147,16 @@ void set_line_scrolling(int index, char *str, int x, uint8_t y, int x1, uint64_t
     reset_line(index);
     memset(line.text,0,LINE_STR_LEN);
     strncpy(line.text,str,MIN(strlen(str),LINE_STR_LEN));
+    line.len = ssd1306_measure_string(line.text);
+    line.xu = x;
     line.x = x;
-    if(centered)
-        line.x = 128/2 - ssd1306_measure_string(str)/2;
+    line.centered = centered;
+    if(line.centered)
+        line.x = line.xu - line.len/2;
+        // line.x = 128/2 - ssd1306_measure_string(str)/2;
     line.y = y;
     line.x1 = x1;
-    if(centered)
+    if(line.centered)
         line.x1 = line.x;
     line.fg = SSD1306_COLOR_WHITE;
     line.bg = SSD1306_COLOR_BLACK;
@@ -222,7 +260,7 @@ static void animation_task()
 static void init_animations()
 {
     reset_all_lines();
-    xTaskCreatePinnedToCore(&animation_task, "animation_task", 4096, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(&animation_task, "animation_task", 4000, NULL, 2, NULL, 1);
     animations_running = true;
 }
 
@@ -252,17 +290,6 @@ static void _i2c_write(uint8_t type, uint8_t* data_send, int data_len)
     memcpy(&data[1], data_send, data_len);
     i2c_write(OLED_I2C_PORT, SLAVE_ADDR, data, data_len+1, TIMEOUT_TICKS);
     free(data);
-}
-
-static bool _i2c_write2(uint8_t addr, uint8_t type, uint8_t* data_send, int data_len)
-{
-
-    uint8_t* data = calloc(data_len + 1, sizeof(uint8_t));
-    data[0] = type;
-    memcpy(&data[1], data_send, data_len);
-    bool ret = i2c_write(OLED_I2C_PORT, SLAVE_ADDR, data, data_len+1, TIMEOUT_TICKS);
-    free(data);
-    return ret;
 }
 
 static void send_cmd(uint8_t command)

@@ -1,30 +1,25 @@
-/**
-  ******************************************************************************
-  * @file    fonts.h
-  * @author  Baoshi <mail(at)ba0sh1(dot)com>
-  * @version 0.8
-  * @date    Jan 3, 2014
-  * @brief   Font description for OLED display, based on
-  *          <a href="http://www.eran.io/the-dot-factory-an-lcd-font-and-image-generator/">
-  *          "TheDotFactory"</a> by Eran "Pavius" Duchan
-  *
-  ******************************************************************************
-  * @copyright
-  *
-  * Copyright (c) 2015, Baoshi Zhu. All rights reserved.
-  * Use of this source code is governed by a BSD-style license that can be
-  * found in the LICENSE.txt file.
-  *
-  * THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED
-  * WARRANTY.  IN NO EVENT WILL THE AUTHOR(S) BE HELD LIABLE FOR ANY DAMAGES
-  * ARISING FROM THE USE OF THIS SOFTWARE.
-  *
-  */
-
-#ifndef FONTS_H
-#define FONTS_H
+#pragma once
 
 #include "common.h"
+
+#define FONT_GLCD         0
+#define FONT_TAHOMA       1
+
+#define  ICON_WIFI_DISCONNECTED    "\x7f"
+#define  ICON_WIFI_CONNECTED       "\x80"
+#define  ICON_IOT_DISCONNECTED     "\x81"
+#define  ICON_IOT_CONNECTED        "\x82"
+#define  ICON_HOME                 "\x83"
+#define  ICON_GEAR                 "\x84"
+#define  ICON_INFO                 "\x85"
+#define  ICON_EXCLAMATION          "\x86"
+#define  ICON_QUESTION             "\x87"
+#define  ICON_DOWNLOAD             "\x88"
+#define  ICON_SELECTOR             "\x89"
+#define  ICON_BLUETOOTH            "\x8a"
+#define  ICON_BLUETOOTH_INVERTED   "\x8b"
+#define  ICON_EMPTY_RECT           "\x8d"
+#define  ICON_FULL_RECT            "\x8e"
 
 //! @brief Character descriptor
 typedef struct _font_char_desc
@@ -45,10 +40,6 @@ typedef struct _font_info
     const uint8_t *bitmap;  //!< Character bitmap
 } font_info_t;
 
-
 #define NUM_FONTS 2    //!< Number of built-in fonts
 
 extern const font_info_t * fonts[NUM_FONTS];  //!< Built-in fonts
-
-
-#endif /* FONTS */
