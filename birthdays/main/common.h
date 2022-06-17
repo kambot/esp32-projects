@@ -75,6 +75,11 @@
 #define SQUARE(a)      ((a) * (a))
 #define BOUND(value,lbound,ubound)    (MIN(MAX((value), (lbound)), (ubound)))
 
+#define bit_set(X,Y)            ((X) |= (Y))
+#define bit_clr(X,Y)            ((X) &= ~(Y))
+#define bit_clr_all(X)          ((X) = 0)
+#define is_bit_set(X,Y)         (((X) & (Y)) == (Y))
+
 // strings
 #define STR_EMPTY(x)      (x == 0 || strlen(x) == 0)
 #define STR_EQUAL(x,y)    (strncmp((x),(y),strlen((x))) == 0 && strlen(x) == strlen(y))
@@ -161,11 +166,35 @@ typedef uint32_t uptime_t;
 // GLOBAL VARIABLES
 // ====================================================================
 
+#define BD_LIST_MAX 300
+
+extern esp_timer_handle_t timer_handle;
+extern esp_timer_handle_t sensor_timer_handle;
+extern task_data_t gui_task_cfg;
+extern task_data_t bd_task_cfg;
 extern uint8_t mac_address[6];
 extern uint8_t bt_mac_address[6];
 
 extern char* bd_data;
+extern birthday_t bd_list[BD_LIST_MAX];
+extern int bd_list_count;
 extern bool refresh_bd_rank;
+extern bool bd_list_updated;
+
+extern int yday;
+extern int year;
+
+extern int64_t download_timer;
+extern bool downloading_data;
+extern bool update_gui_date;
+extern bool selection_changed;
+extern int sel_idx;
+extern int sel_bd_idx;
+
+extern int64_t enter_dev_mode_timer;
+extern bool dev_mode;
+extern bool enter_dev_mode;
+extern bool exit_dev_mode;
 
 // ====================================================================
 // GLOBAL FUNCTIONS

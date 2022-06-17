@@ -12,6 +12,7 @@ idf_component_register(
                         "fonts.c"
                         "oled.c"
                         "button.c"
+                        "gui.c"
 
                     INCLUDE_DIRS
                         "."

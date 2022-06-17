@@ -18,38 +18,38 @@ typedef enum
     SSD1306_COLOR_INVERT = 2,       //!< Invert pixel (XOR)
 } ssd1306_color_t;
 
-typedef struct 
-{
-    int x;
-    uint8_t y;
-    int xu;
-    bool centered;
-    char text[LINE_STR_LEN+1];
-    uint8_t len; // don't need to set
-    ssd1306_color_t fg;
-    ssd1306_color_t bg;
-    bool scrolling;
-    uint64_t num_scrolls;
-    int scroll_counter; // don't need to set
-    int scroll_speed;
-    int x1; // final x coord after completing scrolling
-    int xc; // don't need to set    <- current x coord for scrolling
-    bool update; // don't need to set
-} oled_line;
+// typedef struct 
+// {
+//     int x;
+//     uint8_t y;
+//     int xu;
+//     bool centered;
+//     char text[LINE_STR_LEN+1];
+//     uint8_t len; // don't need to set
+//     ssd1306_color_t fg;
+//     ssd1306_color_t bg;
+//     bool scrolling;
+//     uint64_t num_scrolls;
+//     int scroll_counter; // don't need to set
+//     int scroll_speed;
+//     int x1; // final x coord after completing scrolling
+//     int xc; // don't need to set    <- current x coord for scrolling
+//     bool update; // don't need to set
+// } oled_line;
 
-void reset_line(int index);
-void set_line(oled_line line_data, int index);
-void set_line_text(int index, char* str);
-void set_line_textf(int index, char* format, ...);
-void set_line_no_scroll(int index, char *str, int x, uint8_t y, bool centered);
-void set_line_scrolling(int index, char *str, int x, uint8_t y, int x1, uint64_t scrolls, int scroll_speed, bool centered);
-void reset_all_lines();
-void refresh_lines();
-void pause_animations();
-void resume_animations();
+// void reset_line(int index);
+// void set_line(oled_line line_data, int index);
+// void set_line_text(int index, char* str);
+// void set_line_textf(int index, char* format, ...);
+// void set_line_no_scroll(int index, char *str, int x, uint8_t y, bool centered);
+// void set_line_scrolling(int index, char *str, int x, uint8_t y, int x1, uint64_t scrolls, int scroll_speed, bool centered);
+// void reset_all_lines();
+// void refresh_lines();
+// void pause_animations();
+// void resume_animations();
 
 
-void oled_init();
+void ssd1306_init();
 
 void ssd1306_term();
 void ssd1306_clear();
