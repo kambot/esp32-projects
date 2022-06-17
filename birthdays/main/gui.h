@@ -37,6 +37,7 @@ typedef struct
 
     char text[LINE_MAX_LEN+1];
     uint8_t len; // don't need to set
+    bool reversed;
 
     ssd1306_color_t fg;
     ssd1306_color_t bg;
@@ -45,12 +46,14 @@ typedef struct
 } gui_item_t;
 
 
-void gui_init(gui_func updater, gui_func drawer);
+void gui_init(gui_func updater);
+uint16_t gui_get_frame_period();
 void gui_set_screen(gui_screen_t screen);
 gui_screen_t gui_get_screen();
 void gui_reset_all_items();
 void gui_reset_item(int index);
 void gui_update_item(int index);
-void gui_set_item(int index, uint8_t screen, int x, int y, bool centered, char* format, ...);
-void gui_set_text(int index, char* format, ...);
+void gui_set_item(int index, uint8_t screen, int x, int y, bool centered, bool reversed, char* format, ...);
+void gui_set_coords(int index, int x, int y);
+void gui_set_text(int index, bool reversed, char* format, ...);
 

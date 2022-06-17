@@ -93,9 +93,13 @@ bool get_birthdays()
     download_buffer_index = 0;
     
     esp_log_level_set("HTTP_CLIENT", ESP_LOG_NONE);
+    LOGI("client performing");
     err = esp_http_client_perform(client);
+    LOGI("client finished performing");
     esp_http_client_close(client);
     esp_log_level_set("HTTP_CLIENT", ESP_LOG_ERROR);
+
+    LOGI("data success: %s", BOOLSTR(data_success));
 
     if(!data_success) return false;
 
@@ -131,8 +135,12 @@ bool get_birthdays()
         if(bd_data) free(bd_data);
         bd_data = calloc(strlen(data)+1, sizeof(char));
         memcpy(bd_data, data, strlen(data));
+
+        printf("%s\n", bd_data);
+
         save_bd_data();
-        refresh_bd_rank = true;
+        parse_bd_data();
+        refresh_bd_rank = true; // trigger sorting
     }
 
     free(data);
@@ -140,28 +148,6 @@ bool get_birthdays()
     printf("Free Heap:  %d\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 
     return true;
-
-    // LOGI("Upload result: %s", upload_success ? "SUCCESS" : "FAIL");
-    // return upload_success;
-
-
-    // int sc = esp_http_client_get_status_code(client);
-    // // if(sc == 200 && err == ESP_OK)
-    // if(upload_success)
-    // {
-    //     LOGI("Publish succeeded");
-    //     ret = true;
-    // }
-    // else
-    // {
-    //     LOGE("Failed, status code: %d, client perform error: 0x%x (%s)", sc, err, esp_err_to_name(err));
-    //     ret = false;
-    // }
-
-    // esp_http_client_close(client);
-
-    // GIVE_SEMPHR();
-    // return ret;
 }
 
 

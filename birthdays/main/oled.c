@@ -8,8 +8,7 @@
 #define PIN_SDA 25
 #define PIN_SCL 26
 
-#define SLAVE_ADDR 0x3C
-// #define SLAVE_ADDR 0x7a
+#define I2C_ADDRESS 0x3C
 
 #define TIMEOUT_TICKS 5000
 #define CLK_SPEED 400000
@@ -18,261 +17,6 @@
 #define WRITE_DATA      0x40  //((1 << 7) | (0 << 6))
 // #define READ_STATUS     ((0 << 7) | (1 << 6))
 // #define READ_DATA       ((1 << 7) | (1 << 6))
-
-// #define NUM_LINES   20
-
-
-// static oled_line lines[NUM_LINES] = {0};
-// static bool animations_running = false;
-
-// void reset_line(int index)
-// {
-//     lines[index].x = 0;
-//     lines[index].y = 0;
-//     memset(lines[index].text,0,LINE_STR_LEN);
-//     lines[index].len = 0;
-//     lines[index].fg = SSD1306_COLOR_WHITE;
-//     lines[index].bg = SSD1306_COLOR_BLACK;
-//     lines[index].scrolling = false;
-//     lines[index].num_scrolls = 0;
-//     lines[index].scroll_counter = 0;
-//     lines[index].scroll_speed = 0;
-//     lines[index].x1 = 0;
-//     lines[index].xc = 0;
-//     lines[index].update = true;
-// }
-
-// void print_line_data(int index)
-// {
-//     printf("----------------------\n");
-
-//     printf("x: %d\n",lines[index].x);
-//     printf("y: %u\n",lines[index].y);
-//     printf("text: %s\n",lines[index].text);
-//     printf("len: %u\n",lines[index].len);
-//     printf("fg: %d\n",lines[index].fg);
-//     printf("bg: %d\n",lines[index].bg);
-//     printf("scrolling: %d\n",lines[index].scrolling);
-//     printf("num_scrolls: %lld\n",lines[index].num_scrolls);
-//     printf("scroll_counter: %d\n",lines[index].scroll_counter);
-//     printf("scroll_speed: %d\n",lines[index].scroll_speed);
-//     printf("x1: %d\n",lines[index].x1);
-//     printf("xc: %d\n",lines[index].xc);
-//     printf("update: %d\n",lines[index].update);
-
-//     printf("----------------------\n");
-// }
-
-// void set_line(oled_line line_data, int index)
-// {
-//     reset_line(index);
-//     memcpy(&lines[index], &line_data, sizeof(oled_line));
-
-//     lines[index].len = ssd1306_measure_string(lines[index].text);
-//     lines[index].xc = lines[index].x;
-//     lines[index].scroll_counter = 0;
-//     lines[index].update = true;
-
-//     if(lines[index].scroll_speed == 0)
-//         lines[index].scrolling = false;
-
-//     // print_line_data(index);
-// }
-
-// void set_line_text(int index, char* str)
-// {
-//     if(strcmp(lines[index].text, str) == 0)
-//         return;
-
-//     memset(lines[index].text,0,LINE_STR_LEN);
-//     strncpy(lines[index].text,str,MIN(strlen(str),LINE_STR_LEN));
-//     lines[index].len = ssd1306_measure_string(lines[index].text);
-//     lines[index].update = true;
-// }
-
-// void set_line_textf(int index, char* format, ...)
-// {
-
-//     char* str = NULL;
-
-//     va_list args;
-//     va_start(args, format);
-//     int len = vasprintf(&str, format, args);
-//     va_end(args);
-
-//     if(len == -1)
-//     {
-//         LOGE("Failed to format string");
-//         return;
-//     }
-
-//     if(strcmp(lines[index].text, str) == 0)
-//     {
-//         free(str);
-//         return;
-//     }
-
-//     memset(lines[index].text,0,LINE_STR_LEN);
-//     strncpy(lines[index].text,str,MIN(strlen(str),LINE_STR_LEN));
-//     lines[index].len = ssd1306_measure_string(lines[index].text);
-//     if(lines[index].centered)
-//         lines[index].xc = lines[index].xu - lines[index].len/2;
-//     lines[index].update = true;
-//     free(str);
-// }
-
-// void set_line_no_scroll(int index, char *str, int x, uint8_t y, bool centered)
-// {
-//     oled_line line = {0};
-//     reset_line(index);
-//     memset(line.text,0,LINE_STR_LEN);
-//     strncpy(line.text,str,MIN(strlen(str),LINE_STR_LEN));
-//     line.len = ssd1306_measure_string(line.text);
-//     line.xu = x;
-//     line.x = x;
-//     line.centered = centered;
-//     if(line.centered)
-//         line.x = line.xu - line.len/2;
-//     line.y = y;
-//     line.fg = SSD1306_COLOR_WHITE;
-//     line.bg = SSD1306_COLOR_BLACK;
-//     line.scrolling = false;
-//     line.scroll_speed = 0;
-//     set_line(line, index);
-// }
-
-// void set_line_scrolling(int index, char *str, int x, uint8_t y, int x1, uint64_t scrolls, int scroll_speed, bool centered)
-// {
-//     oled_line line = {0};
-//     reset_line(index);
-//     memset(line.text,0,LINE_STR_LEN);
-//     strncpy(line.text,str,MIN(strlen(str),LINE_STR_LEN));
-//     line.len = ssd1306_measure_string(line.text);
-//     line.xu = x;
-//     line.x = x;
-//     line.centered = centered;
-//     if(line.centered)
-//         line.x = line.xu - line.len/2;
-//         // line.x = 128/2 - ssd1306_measure_string(str)/2;
-//     line.y = y;
-//     line.x1 = x1;
-//     if(line.centered)
-//         line.x1 = line.x;
-//     line.fg = SSD1306_COLOR_WHITE;
-//     line.bg = SSD1306_COLOR_BLACK;
-//     line.scrolling = true;
-//     line.scroll_speed = scroll_speed;
-//     line.num_scrolls = scrolls;
-//     set_line(line, index);
-// }
-
-// void reset_all_lines()
-// {
-//     for(int i = 0; i < NUM_LINES; ++i)
-//         reset_line(i);
-// }
-
-// void refresh_lines()
-// {
-//     for(int i = 0; i < NUM_LINES; ++i)
-//         lines[i].update = true;
-// }
-
-// void pause_animations()
-// {
-//     animations_running = false;
-// }
-
-// void resume_animations()
-// {
-//     animations_running = true;
-// }
-
-// static void animation_task()
-// {
-//     for(;;)
-//     {
-//         if(animations_running)
-//         {
-//             bool refresh = false;
-//             for(int i = 0; i < NUM_LINES; ++i)
-//             {
-//                 if(lines[i].scrolling)
-//                     refresh = true;
-//                 if(lines[i].update)
-//                     refresh = true;
-//             }
-
-//             if(refresh)
-//             {
-//                 ssd1306_clear();
-//                 for(int i = 0; i < NUM_LINES; ++i)
-//                 {
-//                     if(strlen(lines[i].text) == 0) continue;
-
-//                     ssd1306_draw_string(lines[i].xc, lines[i].y, lines[i].text, lines[i].fg, lines[i].bg);
-//                     lines[i].update = false;
-
-//                     if(lines[i].scrolling)
-//                     {
-//                         // printf("x: %d\n",lines[i].xc);
-//                         lines[i].xc += lines[i].scroll_speed;
-
-//                         bool looped = false;
-//                         if(lines[i].scroll_speed > 0)
-//                         {
-//                             if(lines[i].xc >= (128+2))
-//                             {
-//                                 looped = true;
-//                                 lines[i].xc = -1*lines[i].len;
-//                             }
-
-//                         }
-
-//                         if(lines[i].scroll_speed < 0)
-//                         {
-//                             if(lines[i].xc <= (-lines[i].len-2))
-//                             {
-//                                 looped = true;
-//                                 lines[i].xc = 128;
-//                             }
-//                         }
-
-//                         if(looped)
-//                         {
-//                             if(lines[i].scroll_counter++ >= lines[i].num_scrolls)
-//                             {
-//                                 lines[i].xc = lines[i].x1;
-//                                 lines[i].update = true;
-//                                 lines[i].scrolling = false;
-//                             }
-//                         }
-
-//                     } //if line is scrolling
-//                 } //for each line
-//                 ssd1306_refresh(true);
-//                 delay(5);
-//             } //if need to refresh
-//             else
-//             {
-//                 delay(50);
-//             }
-//         } //if animation is running
-//         else
-//         {
-//             delay(50);
-//         } //animation not running
-//     } //task loop
-// }
-
-// static void init_animations()
-// {
-//     reset_all_lines();
-//     xTaskCreatePinnedToCore(&animation_task, "animation_task", 4000, NULL, 2, NULL, 1);
-//     animations_running = true;
-// }
-
-
 
 typedef struct
 {
@@ -294,7 +38,7 @@ static void _i2c_write(uint8_t type, uint8_t* data_send, int data_len)
     uint8_t* data = calloc(data_len + 1, sizeof(uint8_t));
     data[0] = type;
     memcpy(&data[1], data_send, data_len);
-    i2c_write(OLED_I2C_PORT, SLAVE_ADDR, data, data_len+1, TIMEOUT_TICKS);
+    i2c_write(OLED_I2C_PORT, I2C_ADDRESS, data, data_len+1, TIMEOUT_TICKS);
     free(data);
 }
 
@@ -757,13 +501,13 @@ void ssd1306_select_font(uint8_t idx)
 // return character width
 
 
-uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, bool reversed)
-{
-    return ssd1306_draw_char2(x, y, c, SSD1306_COLOR_WHITE, SSD1306_COLOR_BLACK, reversed);
-}
+// uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, bool reversed)
+// {
+//     return ssd1306_draw_char2(x, y, c, SSD1306_COLOR_WHITE, SSD1306_COLOR_BLACK, reversed);
+// }
 
 
-uint8_t ssd1306_draw_char2(uint8_t x, uint8_t y, char c, ssd1306_color_t foreground, ssd1306_color_t background, bool reversed)
+uint8_t ssd1306_draw_char(uint8_t x, uint8_t y, char c, ssd1306_color_t foreground, ssd1306_color_t background, bool reversed)
 {
     uint8_t i, j;
     const uint8_t *bitmap;
@@ -821,7 +565,7 @@ uint8_t ssd1306_draw_char2(uint8_t x, uint8_t y, char c, ssd1306_color_t foregro
 }
 
 
-uint8_t ssd1306_draw_string(uint8_t x, uint8_t y, char *str, ssd1306_color_t foreground, ssd1306_color_t background)
+uint8_t ssd1306_draw_string(uint8_t x, uint8_t y, char *str, ssd1306_color_t foreground, ssd1306_color_t background, bool reversed)
 {
     uint8_t t = x;
 
@@ -831,14 +575,24 @@ uint8_t ssd1306_draw_string(uint8_t x, uint8_t y, char *str, ssd1306_color_t for
     if (str == NULL)
         return 0;
 
-    while (*str)
+    int v = 1;
+    char* start = str;
+    char* end = &str[strlen(str)-1];
+    if(reversed)
     {
-       x += ssd1306_draw_char2(x, y, *str, foreground, background, false);
-       ++str;
-       if (*str)
-           x += ctx.font->c;
+        char* temp = start;
+        start = end;
+        end = temp;
+        v = -1;
     }
 
+    for(;;)
+    {
+        x += ssd1306_draw_char(x, y, *start, foreground, background, reversed);
+        if(start == end) break;
+        start += v;
+        x += ctx.font->c;   // c represents space between characters
+    }
     return (x - t);
 }
 
